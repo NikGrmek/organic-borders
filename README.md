@@ -1,62 +1,37 @@
-# Polygon Border Generator
+# Auto Borders Tool
 
-A sophisticated web application that processes PNG images and creates stylized polygon or low-poly borders around objects with configurable settings.
+A web-based application for automatically generating polygon borders around images. This tool is perfect for creating clean borders around product images, portraits, or any other content that needs to stand out.
 
 ## Features
 
-- Upload PNG images with transparency
-- Automatically detect object edges in images
-- Generate polygon borders with adjustable settings:
-  - Simplification level (controls polygon complexity)
-  - Border thickness
-  - Corner style (sharp, rounded, or beveled)
-  - Border color
-- Option for low-poly style triangulation borders
-- Real-time preview with automatic updates when settings change
-- Download the final result as a PNG image
+- Upload any PNG image
+- Automatically detect edges
+- Customize border thickness, color, and style
+- Apply black & white filters and image adjustments
+- Export as PNG or PSD with separate layers
+- Integration with Eagle App for direct library imports
+- Responsive design works on any device
 
 ## How to Use
 
-1. Open `index.html` in your web browser
-2. Click the "Upload PNG Image" button and select a PNG image with transparency
-3. Use the sliders to adjust:
-   - Simplification level (lower values produce more detailed borders with more points)
-   - Border thickness
-4. Choose a corner style:
-   - Sharp (miter): Creates pointy corners
-   - Rounded: Creates smooth, rounded corners
-   - Beveled: Creates flat, angled corners
-5. Toggle "Low-poly style" checkbox to create a triangulated, geometric effect
-6. Use the color picker to choose the border color
-7. The border will automatically update as you change settings
-8. Click "Download Result" to save your image with the polygon border
+1. Upload an image by clicking "Select Image" or dragging and dropping
+2. Adjust border settings as desired
+3. Export your image in PNG or PSD format
+4. Optionally add directly to Eagle App library (if installed)
 
 ## Technical Details
 
-The application uses advanced techniques for edge detection and polygon generation:
+Built with pure HTML, CSS, and JavaScript with no dependencies except for:
+- FileSaver.js for downloading files
+- AG-PSD for PSD file generation
 
-### Edge Detection
-- Analyzes the alpha channel of PNG images to identify border pixels
-- Uses 8-connectivity to detect edges with high accuracy
+## Eagle App Integration
 
-### Polygon Simplification
-- Implements the Ramer-Douglas-Peucker (RDP) algorithm to simplify border contours
-- The simplification slider controls the epsilon parameter, determining how closely the polygons follow the original contour
+The tool supports direct integration with Eagle App for quick saving of processed images to your library. To use this feature:
+1. Make sure Eagle App is running
+2. Toggle the "Use Eagle App API" switch
+3. Click "Add to Library"
 
-### Low-Poly Generation
-- Creates a triangulation based on the simplified contour points and centroid
-- Produces a modern, geometric aesthetic while preserving the overall shape
+## License
 
-## Requirements
-
-- A modern web browser that supports HTML5 Canvas
-- PNG images with transparency (for best results)
-
-## Tips
-
-- For best results, use PNG images with transparent backgrounds and clear object edges
-- Lower simplification values create more detailed borders but may appear noisy
-- Higher simplification values create cleaner, more stylized borders
-- The low-poly style works best with medium to high simplification values
-- Try different corner styles for different aesthetic effects
-- Black borders look classic, but colored borders can create interesting design effects 
+MIT License 
