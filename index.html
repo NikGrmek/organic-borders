@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Polygon Border Generator</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="main-content">
+            <div class="sidebar">
+                <div class="panel" id="upload-panel">
+                    <div class="panel-header">Image Upload</div>
+                    <div class="panel-content">
+                        <div class="upload-container">
+                            <button id="selectImage" class="upload-btn">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M12 4V20M4 12H20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                </svg>
+                                Select Image
+                            </button>
+                            <input type="file" id="imageUpload" accept="image/png" class="file-upload">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="panel" id="edge-selection-panel" style="display: none;">
+                    <div class="panel-header">Edge Selection</div>
+                    <div class="panel-content">
+                        <div class="control-group">
+                            <label>Edge Selection Mode</label>
+                            <label class="toggle">
+                                <input type="checkbox" id="edgeSelectionMode">
+                                <span class="toggle-slider"></span>
+                                <span class="toggle-label">Click edges to select</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="panel" id="controls" style="display: none;">
+                    <div class="panel-header">Border Settings</div>
+                    <div class="panel-content">
+                        <div class="control-group">
+                            <label>Shape Simplification</label>
+                            <div class="slider-container">
+                                <input type="range" id="simplificationRange" class="slider" min="1" max="50" value="18" step="1">
+                                <span class="slider-value" id="simplificationValue">18</span>
+                            </div>
+                        </div>
+                        
+                        <div class="control-group">
+                            <label>Thickness</label>
+                            <div class="slider-container">
+                                <input type="range" id="thicknessRange" class="slider" min="0" max="500" value="46" step="1">
+                                <span class="slider-value" id="thicknessValue">46</span>
+                            </div>
+                        </div>
+                        
+                        <div class="control-group">
+                            <label>Border Color</label>
+                            <div class="color-container">
+                                <input type="color" id="borderColor" value="#FFFFFF">
+                                <span>Color</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="panel" id="image-filters" style="display: none;">
+                    <div class="panel-header">Image Filters</div>
+                    <div class="panel-content">
+                        <div class="control-group">
+                            <label>Black & White</label>
+                            <label class="toggle">
+                                <input type="checkbox" id="blackAndWhiteFilter" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        
+                        <div id="bwFilterControls">
+                            <div class="control-group">
+                                <label>Black Point</label>
+                                <div class="slider-container">
+                                    <input type="range" id="blackPointRange" class="slider" min="0" max="254" value="0" step="1">
+                                    <span class="slider-value" id="blackPointValue">0</span>
+                                </div>
+                            </div>
+                            
+                            <div class="control-group">
+                                <label>White Point</label>
+                                <div class="slider-container">
+                                    <input type="range" id="whitePointRange" class="slider" min="1" max="255" value="255" step="1">
+                                    <span class="slider-value" id="whitePointValue">255</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="panel" id="shadow-settings" style="display: none;">
+                    <div class="panel-header">Shadow Settings</div>
+                    <div class="panel-content">
+                        <div class="control-group">
+                            <label>Shadow Size</label>
+                            <div class="slider-container">
+                                <input type="range" id="shadowSizeRange" class="slider" min="0" max="100" value="15" step="1">
+                                <span class="slider-value" id="shadowSizeValue">15</span>
+                            </div>
+                        </div>
+                        
+                        <div class="control-group">
+                            <label>Shadow Opacity</label>
+                            <div class="slider-container">
+                                <input type="range" id="shadowOpacityRange" class="slider" min="0" max="100" value="40" step="1">
+                                <span class="slider-value" id="shadowOpacityValue">40</span>
+                                <span class="number-unit">%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="export-buttons">
+                    <div class="export-toggle-container">
+                        <label class="toggle">
+                            <input type="checkbox" id="addToLibraryToggle">
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-label">Use Eagle App API</span>
+                        </label>
+                        <button id="resetFolderBtn" class="icon-btn" title="Change library folder" style="display: none;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M3 5H9L10 7H21V19H3V5Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                    </div>
+                    
+                    <button id="downloadBtn" class="download-btn" style="display: none;">
+                        Download PNG
+                    </button>
+                    
+                    <button id="exportPsdBtn" class="download-btn" style="display: none; ">
+                        Download PSD
+                    </button>
+                    
+                    <button id="addToLibraryBtn" class="download-btn" style="display: none;" title="Add to Library">
+                        Add to Library
+                    </button>
+                </div>
+            </div>
+            
+            <div class="canvas-area">
+                <div class="canvas-container">
+                    <canvas id="imageCanvas"></canvas>
+                    <canvas id="borderCanvas"></canvas>
+                </div>
+                <div class="upload-placeholder">Upload an image to begin editing</div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://unpkg.com/ag-psd@18.0.1/dist/bundle.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <script>
+        // Make sure agPsd is available to our application
+        window.agPsdLibrary = agPsd;
+    </script>
+    
+    <!-- Hidden iframe for Eagle API communication (works around CORS) -->
+    <iframe id="eagleProxyFrame" style="display:none;"></iframe>
+    
+    <script src="script.js"></script>
+</body>
+</html> 
