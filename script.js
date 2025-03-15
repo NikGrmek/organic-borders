@@ -1,4 +1,47 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // Global variables 
+    let addToLibraryToggle; // Declare this globally so it can be used across functions
+    let lastCreatedPsdData = null; // Store the last created PSD data for direct opening
+    
+    // Add CSS for processing message
+    const style = document.createElement('style');
+    style.textContent = `
+        .processing-message {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        .processing-content {
+            background-color: white;
+            padding: 20px 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    `;
+    document.head.appendChild(style);
+    
     // Initialize draggable number controls
     initDraggableNumbers();
     
@@ -19,7 +62,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let controlPointsCanvas;
     const downloadBtn = document.getElementById('downloadBtn');
     const exportPsdBtn = document.getElementById('exportPsdBtn');
-    const addToLibraryToggle = document.getElementById('addToLibraryToggle');
+    // Don't redeclare addToLibraryToggle with const here since we're using it as a global variable
+    addToLibraryToggle = document.getElementById('addToLibraryToggle');
     const resetFolderBtn = document.getElementById('resetFolderBtn');
     const exportToggleContainer = document.querySelector('.export-toggle-container');
     const controls = document.getElementById('controls');
@@ -94,7 +138,10 @@ document.addEventListener('DOMContentLoaded', () => {
     downloadBtn.style.display = 'none';
     exportPsdBtn.style.display = 'none';
     exportToggleContainer.style.display = 'none';
-    resetFolderBtn.style.display = 'none';
+    // Add null check for resetFolderBtn before trying to access its style property
+    if (resetFolderBtn) {
+        resetFolderBtn.style.display = 'none';
+    }
     
     // Initialize sliders for custom input
     initSliders();
@@ -104,14 +151,11 @@ document.addEventListener('DOMContentLoaded', () => {
     selectImageBtn.addEventListener('click', () => fileUpload.click());
     downloadBtn.addEventListener('click', downloadResult);
     exportPsdBtn.addEventListener('click', exportAsPsd);
-    resetFolderBtn.addEventListener('click', resetExportFolder);
-    addToLibraryToggle.addEventListener('change', handleToggleChange);
-    
-    // Add to Library button
-    const addToLibraryBtn = document.getElementById('addToLibraryBtn');
-    if (addToLibraryBtn) {
-        addToLibraryBtn.addEventListener('click', addToEagleLibrary);
+    // Add null check before adding the event listener
+    if (resetFolderBtn) {
+        resetFolderBtn.addEventListener('click', resetExportFolder);
     }
+    addToLibraryToggle.addEventListener('change', handleToggleChange);
     
     // Set up drag and drop for the canvas area
     canvasArea.addEventListener('dragover', handleDragOver);
@@ -173,8 +217,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (files.length > 0) {
             const file = files[0];
             
-            // Check if file is an image
-            if (file.type.match('image.*')) {
+            // Get file type and extension
+            const fileType = file.type;
+            const fileName = file.name.toLowerCase();
+            const isPsd = fileType.match('application/photoshop') || 
+                          fileType.match('image/vnd.adobe.photoshop') || 
+                          fileType.match('application/x-photoshop') || 
+                          fileName.endsWith('.psd');
+            
+            // Check if file is an image or PSD
+            if (fileType.match('image.*') || isPsd) {
                 // Process the file as if it was selected via the file input
                 const dataTransfer = new DataTransfer();
                 dataTransfer.items.add(file);
@@ -307,6 +359,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const file = e.target.files[0];
         if (!file) return;
         
+        // Check if it's a PSD file
+        const isPsd = file.type.match('application/photoshop') || 
+                      file.type.match('image/vnd.adobe.photoshop') || 
+                      file.type.match('application/x-photoshop') || 
+                      file.name.toLowerCase().endsWith('.psd');
+                      
+        if (isPsd) {
+            // PSD files are not supported for direct upload
+            console.error('PSD files are not supported for direct upload');
+            return;
+        }
+        
         const reader = new FileReader();
         
         reader.onload = function(event) {
@@ -359,12 +423,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 downloadBtn.style.display = 'block';
                 exportPsdBtn.style.display = 'block';
                 exportToggleContainer.style.display = 'flex';
-                
-                // Show the Add to Library button
-                const addToLibraryBtn = document.getElementById('addToLibraryBtn');
-                if (addToLibraryBtn) {
-                    addToLibraryBtn.style.display = 'block';
-                }
                 
                 // Update folder information in UI if available
                 updateFolderInfo();
@@ -1536,27 +1594,56 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Check if we should also save to library folder
             if (addToLibraryToggle && addToLibraryToggle.checked) {
-                const savedFolderHandle = getSavedDirectoryHandle();
+                // Check if Eagle API is enabled or we should use folder
+                const useEagleAPI = addToLibraryToggle && addToLibraryToggle.checked;
                 
-                if (savedFolderHandle) {
-                    const success = await exportPngToFolder(savedFolderHandle, blob, fileName);
-                    if (success) {
-                        alert(`PNG file '${fileName}' has been saved to both your Downloads folder and your library folder: ${savedFolderHandle.name}`);
-                    }
-                } else {
-                    // Try auto-selecting the folder
-                    try {
-                        const folderHandle = await selectExportFolderAuto();
-                        if (folderHandle) {
-                            saveDirectoryHandle(folderHandle);
-                            const success = await exportPngToFolder(folderHandle, blob, fileName);
-                            if (success) {
-                                alert(`PNG file '${fileName}' has been saved to both your Downloads folder and your library folder: ${folderHandle.name}`);
-                            }
+                if (useEagleAPI) {
+                    // Try to add to Eagle Library
+                    console.log('Adding PNG to Eagle library...');
+                    
+                    // Convert the canvas to data URL for Eagle API
+                    const imageDataURL = tempCanvas.toDataURL('image/png');
+                    
+                    // Create tags for the image (empty array - no tags for PNG files)
+                    const tags = [];
+                    
+                    // Add to Eagle library using API
+                    tryDirectEagleAPI(imageDataURL, fileName, tags, 'png').catch(error => {
+                        console.error('Direct Eagle API failed:', error);
+                        
+                        // Fall back to proxy method if direct method fails
+                        console.log('Falling back to proxy method...');
+                        const proxySuccess = sendToEagleViaProxy(imageDataURL, fileName, tags);
+                        
+                        if (!proxySuccess) {
+                            // If proxy method also fails, log error
+                            console.error('Unable to connect to Eagle App. Please verify it is running and API access is enabled.');
                         }
-                    } catch (error) {
-                        console.error('Error saving to library folder:', error);
-                        alert('PNG file has been downloaded, but could not be saved to library folder. Please check console for details.');
+                    });
+                } else {
+                    // Use folder selection (existing code)
+                    const savedFolderHandle = getSavedDirectoryHandle();
+                    
+                    if (savedFolderHandle) {
+                        const success = await exportPngToFolder(savedFolderHandle, blob, fileName);
+                        if (success) {
+                            alert(`PNG file '${fileName}' has been saved to both your Downloads folder and your library folder: ${savedFolderHandle.name}`);
+                        }
+                    } else {
+                        // Try auto-selecting the folder
+                        try {
+                            const folderHandle = await selectExportFolderAuto();
+                            if (folderHandle) {
+                                saveDirectoryHandle(folderHandle);
+                                const success = await exportPngToFolder(folderHandle, blob, fileName);
+                                if (success) {
+                                    alert(`PNG file '${fileName}' has been saved to both your Downloads folder and your library folder: ${folderHandle.name}`);
+                                }
+                            }
+                        } catch (error) {
+                            console.error('Error saving to library folder:', error);
+                            alert('PNG file has been downloaded, but could not be saved to library folder. Please check console for details.');
+                        }
                     }
                 }
             }
@@ -1648,55 +1735,54 @@ document.addEventListener('DOMContentLoaded', () => {
             // Create a blob from the PSD buffer
             const blob = new Blob([psdBuffer], { type: 'image/vnd.adobe.photoshop' });
             
-            // Check if we should save to library folder
+            // Store the last created PSD data for direct opening
+            lastCreatedPsdData = {
+                buffer: psdBuffer,
+                fileName: fileName,
+                previewDataURL: compositeCanvas.toDataURL('image/png'),
+                tags: ['polygon-border', 'auto-border', 'generated', 'psd'],
+                annotation: "Generated with Auto Borders Tool"
+            };
+            
+            // ALWAYS download the PSD locally first - this ensures the user has a copy
+            downloadAsPSD(blob, fileName);
+            
+            // Check if we should also add to Eagle
             if (addToLibraryToggle && addToLibraryToggle.checked) {
-                // First, check if we have a saved folder handle
-                const savedFolderHandle = getSavedDirectoryHandle();
+                console.log('Adding PSD to Eagle library...');
                 
-                if (savedFolderHandle) {
-                    // We have a handle, verify it's still valid and use it
-                    verifyPermission(savedFolderHandle, true).then(hasPermission => {
-                        if (hasPermission) {
-                            exportPsdToFolder(savedFolderHandle);
-                        } else {
-                            // Permission denied or handle invalid, prompt again
-                            alert('Permission to folder was denied. Please select a folder again.');
-                            localStorage.removeItem('savedExportFolderData');
-                            promptForFolder().then(success => {
-                                // If folder selection failed, still download
-                                if (!success) {
-                                    downloadAsPSD(blob, fileName);
-                                }
-                            });
+                // Get a preview image for Eagle
+                const previewDataURL = compositeCanvas.toDataURL('image/png');
+                
+                // Add metadata
+                const tags = ['polygon-border', 'auto-border', 'generated', 'psd'];
+                const metadata = {
+                    tags: tags,
+                    annotation: "Generated with Auto Borders Tool",
+                    website: window.location.href
+                };
+                
+                // Check if Eagle app is running first
+                isEagleAppRunning()
+                    .then(isRunning => {
+                        if (isRunning) {
+                            // Check if we need to use the folder selection instead of direct Eagle API for PSD
+                            if (exportPsdBtn.id === 'exportPsdBtn') {
+                                // For PSD files, use folder selection instead of direct Eagle app API
+                                handlePsdFolderSelection(blob, fileName, psdBuffer, previewDataURL, metadata);
+                            } else {
+                                // For other file types (PNG), use direct Eagle app link method as normal
+                                sendPsdToEagle(psdBuffer, previewDataURL, fileName, metadata);
+                            }
                         }
-                    }).catch(error => {
-                        console.error('Error verifying folder permission:', error);
-                        downloadAsPSD(blob, fileName);
                     });
-                } else {
-                    // Try to select a folder
-                    selectExportFolderAuto().then(folderHandle => {
-                        if (folderHandle) {
-                            saveDirectoryHandle(folderHandle);
-                            exportPsdToFolder(folderHandle);
-                        } else {
-                            promptForFolder().then(success => {
-                                if (!success) {
-                                    downloadAsPSD(blob, fileName);
-                                }
-                            });
-                        }
-                    }).catch(error => {
-                        console.error('Error selecting folder:', error);
-                        downloadAsPSD(blob, fileName);
-                    });
-                }
             } else {
-                // Just download without saving to library folder
-                downloadAsPSD(blob, fileName);
+                // This branch is for when Eagle toggle is unchecked - user wants regular Downloads only
+                // No need to do anything extra, as we've already downloaded the PSD to Downloads folder
+                console.log('Eagle integration disabled - PSD already downloaded to Downloads folder');
             }
         } catch (error) {
-            console.error('Error creating PSD file:', error);
+            console.error('Error creating PSD:', error);
             alert('Failed to create PSD file: ' + error.message);
         }
     }
@@ -1971,7 +2057,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const downloadsPath = getDownloadsFolder();
         
         if (!downloadsPath) {
-            alert('Could not determine Downloads folder path. Please manually add the file to Eagle.');
+            console.error('Could not determine Downloads folder path. Please manually add the file to Eagle.');
             return;
         }
         
@@ -1999,15 +2085,15 @@ document.addEventListener('DOMContentLoaded', () => {
         .then(response => response.json())
         .then(data => {
             if (data.status === 'success') {
-                alert('File successfully added to Eagle library!');
+                console.log('File successfully added to Eagle library!');
             } else {
                 console.error('Eagle API error:', data);
-                alert('Failed to add file to Eagle. See console for details.');
+                console.error('Failed to add file to Eagle. See console for details.');
             }
         })
         .catch(error => {
             console.error('Error adding file to Eagle:', error);
-            alert('Failed to add file to Eagle. Is Eagle running? See console for details.');
+            console.error('Failed to add file to Eagle. Is Eagle running? See console for details.');
         });
     }
 
@@ -2138,90 +2224,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Function to add the current PSD to Eagle library
     function addToEagleLibrary() {
-        console.log('Add to Library function triggered');
-        
         if (!originalImage) {
-            console.error('No image loaded');
-            alert('Please upload an image first');
+            console.error('No image to add to library');
             return;
         }
         
-        // Check if Eagle App integration is enabled
-        const addToLibraryToggle = document.getElementById('addToLibraryToggle');
+        // Use the global variable instead of redeclaring it
         const useEagleAPI = addToLibraryToggle && addToLibraryToggle.checked;
         
-        console.log('Using Eagle API:', useEagleAPI);
-        
         if (useEagleAPI) {
-            // Use Eagle API to add the image - skip folder selection completely
+            console.log('Using Eagle API...');
             addImageToEagleAPI();
-            return; // Early return to prevent any folder selection code from running
-        }
-        
-        // If not using Eagle API, proceed with folder selection
-        console.log('Not using Eagle API, checking for saved folder handle');
-        
-        // First, check if we have a saved folder handle from this session
-        const savedFolderHandle = getSavedDirectoryHandle();
-        
-        if (savedFolderHandle) {
-            // We have a handle from this session, verify it's still valid and use it
-            console.log('Found saved folder handle, verifying permissions');
-            verifyPermission(savedFolderHandle, true).then(hasPermission => {
-                if (hasPermission) {
-                    console.log('Permission verified, exporting to folder');
-                    exportPsdToFolder(savedFolderHandle);
-                } else {
-                    // Permission denied or handle invalid, prompt again
-                    console.error('Permission to folder was denied');
-                    alert('Permission to folder was denied. Please select a folder again.');
-                    localStorage.removeItem('savedExportFolderData');
-                    promptForFolder();
-                }
-            }).catch(error => {
-                console.error('Error verifying folder permission:', error);
-                // Something went wrong, prompt again
-                localStorage.removeItem('savedExportFolderData');
-                promptForFolder();
-            });
         } else {
-            // Check if we have saved data from a previous session
-            const savedData = localStorage.getItem('savedExportFolderData');
-            
-            if (savedData) {
-                console.log('Found saved folder data, attempting auto-selection');
-                try {
-                    // Parse the saved data to get folder name
-                    const folderData = JSON.parse(savedData);
-                    
-                    // Don't ask the user, just try to select the folder directly
-                    selectExportFolderAuto().then(folderHandle => {
-                        if (folderHandle) {
-                            console.log('Auto-selected folder, saving handle');
-                            // Save the selected handle for future use
-                            saveDirectoryHandle(folderHandle);
-                            // Now export the PSD
-                            exportPsdToFolder(folderHandle);
-                        } else {
-                            // If auto-selection fails, fall back to manual selection
-                            console.log('Auto-selection failed, prompting for folder');
-                            promptForFolder();
-                        }
-                    }).catch(error => {
-                        console.error('Error auto-selecting folder:', error);
-                        // Fall back to manual folder selection
-                        promptForFolder();
-                    });
-                } catch (error) {
-                    console.error('Error parsing saved folder data:', error);
-                    localStorage.removeItem('savedExportFolderData');
-                    promptForFolder();
-                }
-            } else {
-                // No saved folder data, prompt for folder selection
-                console.log('No saved folder data, prompting for folder selection');
-                promptForFolder();
-            }
+            console.log('Using folder export...');
+            // Prompt for folder selection if we don't have one yet
+            exportPsdToFolder();
         }
     }
     
@@ -2237,18 +2254,15 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!isRunning) {
                 console.error('Eagle App is not running or not responding to API requests');
                 
-                // Show a more detailed error message for macOS users
+                // Log a detailed error message
                 const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
                 if (isMac) {
-                    alert('Eagle App is not responding. This could be due to:\n\n' +
-                          '1. Eagle App is not running\n' +
-                          '2. CORS restrictions in your browser\n' +
-                          '3. Eagle API access requires permissions\n\n' +
-                          'Try using the direct Eagle Import feature instead:\n' +
-                          '1. Save as PNG first\n' +
-                          '2. Drag the PNG into Eagle');
+                    console.error('Could not connect to Eagle App. Possible reasons:\n' +
+                          '1. Eagle App is not running on Mac\n' +
+                          '2. API access is not enabled in Eagle App preferences\n' +
+                          '3. Firewall is blocking localhost connections');
                 } else {
-                    alert('Eagle App is not responding. Try saving as PNG and dragging into Eagle manually.');
+                    console.error('Eagle App is not running. Try saving as PNG and dragging into Eagle manually.');
                 }
                 return;
             }
@@ -2274,84 +2288,101 @@ document.addEventListener('DOMContentLoaded', () => {
             const timestamp = new Date().getTime();
             const fileName = `polygon-border-${timestamp}.png`;
             
-            // Prepare tags for the image (testing tags as requested)
-            const tags = ['polygon-border', 'auto-border', 'testing', 'generated'];
+            // Prepare tags for the image (empty array - no tags for PNG files)
+            const tags = [];
             
-            // Eagle API endpoint for adding from URL (using 127.0.0.1 instead of localhost)
-            const eagleAPIEndpoint = 'http://127.0.0.1:41595/api/item/addFromURL';
+            // First try direct API method
+            tryDirectEagleAPI(imageDataURL, fileName, tags).catch(error => {
+                console.error('Direct Eagle API failed:', error);
+                
+                // Fall back to proxy method if direct method fails
+                console.log('Falling back to proxy method...');
+                const proxySuccess = sendToEagleViaProxy(imageDataURL, fileName, tags);
+                
+                if (!proxySuccess) {
+                    // If proxy method also fails, log error
+                    console.error('Unable to connect to Eagle App. Please verify it is running and API access is enabled.');
+                }
+            });
+        });
+    }
+    
+    // Function to try direct Eagle API connection
+    function tryDirectEagleAPI(fileURL, fileName, tags, fileType = 'png') {
+        return new Promise((resolve, reject) => {
+            console.log(`Trying direct Eagle API connection for ${fileType} file...`);
             
-            // Eagle App API token
-            const eagleApiToken = '4d1fb3b8-1313-412f-9d74-a86c8c8c5d1c';
+            // Eagle App API token from config
+            const eagleApiToken = window.eagleConfig ? window.eagleConfig.apiToken : '';
             
-            console.log('Sending request to Eagle API...');
+            // Eagle API endpoint for adding from URL
+            const apiUrl = 'http://127.0.0.1:41595/api/item/addFromURL';
             
-            // Send request to Eagle API
-            fetch(eagleAPIEndpoint, {
+            // Prepare payload
+            const payload = {
+                url: fileURL,
+                name: fileName,
+                tags: fileType === 'png' ? [] : tags, // Don't add tags for PNG files
+                annotation: "Generated with Auto Borders Tool",
+                website: window.location.href
+            };
+            
+            // Add file type metadata if it's a PSD
+            if (fileType === 'psd') {
+                payload.ext = 'psd';
+                payload.mimetype = 'image/vnd.adobe.photoshop';
+
+                // For external URLs with PSD files, we need to ensure Eagle knows it's a PSD
+                console.log('Using enhanced PSD handling for external URL:', fileURL);
+                console.log('SENDING PSD TO EAGLE - URL: ' + fileURL);
+                console.log({payload});
+                
+                // Try to fetch with addFromURL first
+                fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${eagleApiToken}`
+                    },
+                    body: JSON.stringify(payload)
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Eagle API responded with status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Eagle API response for PSD:', data);
+                    resolve(data);
+                })
+                .catch(error => {
+                    console.error('Error adding PSD to Eagle library via API:', error);
+                    reject(error);
+                });
+                
+                return; // Skip the rest of the function for PSD files
+            }
+            
+            // Send the request with no-cors mode (for non-PSD files)
+            fetch(apiUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${eagleApiToken}`
                 },
-                body: JSON.stringify({
-                    url: imageDataURL,
-                    name: fileName,
-                    tags: tags,
-                    annotation: 'Generated with Auto Borders Tool',
-                    website: window.location.href
-                }),
-                mode: 'cors',
-                credentials: 'omit'
+                body: JSON.stringify(payload),
+                mode: 'no-cors'
             })
             .then(response => {
-                console.log('Eagle API response status:', response.status);
-                if (!response.ok) {
-                    throw new Error(`Eagle API responded with status: ${response.status}`);
-                }
-                return response.json();
-            })
-            .then(data => {
-                console.log('Successfully added to Eagle:', data);
-                alert('Image successfully added to Eagle library with tags: ' + tags.join(', '));
+                console.log('Direct Eagle API response received');
+                // In no-cors mode, we can't read the response
+                // but if we get here without error, it's likely successful
+                resolve();
             })
             .catch(error => {
-                console.error('Error adding to Eagle:', error);
-                
-                // Try using the iframe proxy if direct fetch fails
-                if (error.message.includes('NetworkError') || error.message.includes('Failed to fetch') || 
-                    error.message.includes('CORS') || error.message.toLowerCase().includes('access') || error.message.includes('blocked')) {
-                    console.log('Direct API call failed, trying via iframe proxy...');
-                    
-                    sendToEagleViaProxy(imageDataURL, fileName, tags)
-                        .then(data => {
-                            console.log('Successfully added to Eagle via proxy:', data);
-                            alert('Image successfully added to Eagle library with tags: ' + tags.join(', '));
-                        })
-                        .catch(proxyError => {
-                            console.error('Proxy API call also failed:', proxyError);
-                            
-                            // Final fallback - download for manual import
-                            const downloadLink = document.createElement('a');
-                            downloadLink.href = imageDataURL;
-                            downloadLink.download = fileName;
-                            
-                            // Create a blob instead of using data URL directly
-                            fetch(imageDataURL)
-                                .then(res => res.blob())
-                                .then(blob => {
-                                    const url = window.URL.createObjectURL(blob);
-                                    downloadLink.href = url;
-                                    document.body.appendChild(downloadLink);
-                                    downloadLink.click();
-                                    document.body.removeChild(downloadLink);
-                                    window.URL.revokeObjectURL(url);
-                                    
-                                    alert('Could not connect to Eagle App due to browser security restrictions.\n\n' +
-                                        'The image has been downloaded - you can drag it into Eagle manually.');
-                                });
-                        });
-                } else {
-                    alert('Failed to add to Eagle: ' + error.message + '\nCheck the browser console for more details.');
-                }
+                console.error('Error adding to Eagle library:', error);
+                reject(error);
             });
         });
     }
@@ -2368,43 +2399,109 @@ document.addEventListener('DOMContentLoaded', () => {
                 resolve(false);
             }, timeoutDuration);
             
-            // Eagle App API token
-            const eagleApiToken = '4d1fb3b8-1313-412f-9d74-a86c8c8c5d1c';
+            // Eagle App API token from config
+            const eagleApiToken = window.eagleConfig ? window.eagleConfig.apiToken : '';
             
-            // Use the local app URL without localhost to avoid CORS
-            // Eagle App runs on 41595 port, and we can use direct IP to avoid CORS
+            // Use the local app URL
             const apiUrl = 'http://127.0.0.1:41595/api/application/info';
             
+            // Try with simple no-cors approach first
             fetch(apiUrl, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${eagleApiToken}`
                 },
-                // Add cache control to prevent cached responses
                 cache: 'no-cache',
-                // Important for CORS when using credentials like auth headers
-                mode: 'cors',
-                credentials: 'omit'
+                mode: 'no-cors' // Try with no-cors mode first to avoid CORS errors
             })
             .then(response => {
                 clearTimeout(timeout);
-                console.log('Eagle App API response status:', response.status);
-                resolve(response.ok);
-                // Return the response for additional debugging
-                return response.json();
-            })
-            .then(data => {
-                // Log Eagle App info if available
-                if (data) {
-                    console.log('Eagle App info:', data);
-                }
+                // In no-cors mode, we can't read response status, but if we get here without error,
+                // it's likely the app is running
+                console.log('Eagle App API response received (no-cors mode)');
+                // With no-cors we can't actually read the response data
+                // but at least we know the request didn't fail
+                resolve(true);
             })
             .catch(error => {
                 clearTimeout(timeout);
-                console.error('Error checking Eagle App:', error.message);
-                resolve(false);
+                console.error('Error checking Eagle App with no-cors mode:', error.message);
+                
+                // Fallback: Try the Eagle proxy frame approach
+                tryEagleProxyCheck().then(isRunning => {
+                    resolve(isRunning);
+                });
             });
+        });
+    }
+    
+    // Helper function to check Eagle availability via iframe proxy
+    function tryEagleProxyCheck() {
+        return new Promise((resolve) => {
+            console.log('Trying Eagle proxy frame check...');
+            
+            // Create a temporary invisible iframe
+            const tempFrame = document.createElement('iframe');
+            tempFrame.style.display = 'none';
+            document.body.appendChild(tempFrame);
+            
+            // Set a timeout for the check
+            const checkTimeout = setTimeout(() => {
+                document.body.removeChild(tempFrame);
+                console.error('Eagle proxy check timed out');
+                resolve(false);
+            }, 3000);
+            
+            // Listen for messages from the iframe
+            const messageHandler = function(event) {
+                if (event.data && event.data.eagleCheck) {
+                    window.removeEventListener('message', messageHandler);
+                    clearTimeout(checkTimeout);
+                    document.body.removeChild(tempFrame);
+                    console.log('Eagle proxy check result:', event.data.running);
+                    resolve(event.data.running);
+                }
+            };
+            
+            window.addEventListener('message', messageHandler);
+            
+            // Set the iframe content to a simple page that tries to connect to Eagle
+            tempFrame.srcdoc = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <script>
+                        // Get API token from parent window
+                        const eagleApiToken = window.parent.eagleConfig ? window.parent.eagleConfig.apiToken : '';
+                        
+                        // Try to ping Eagle
+                        fetch('http://127.0.0.1:41595/api/application/info', {
+                            method: 'GET',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': 'Bearer ' + eagleApiToken
+                            }
+                        })
+                        .then(response => {
+                            // Send message back to parent
+                            window.parent.postMessage({
+                                eagleCheck: true,
+                                running: true
+                            }, '*');
+                        })
+                        .catch(error => {
+                            // Send message back to parent
+                            window.parent.postMessage({
+                                eagleCheck: true,
+                                running: false
+                            }, '*');
+                        });
+                    </script>
+                </head>
+                <body>Eagle App Check</body>
+                </html>
+            `;
         });
     }
     
@@ -2417,8 +2514,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     saveDirectoryHandle(folderHandle);
                     // Update UI to reflect the selected folder
                     updateFolderInfoUI(folderHandle.name);
-                    // Also display the reset folder button
-                    resetFolderBtn.style.display = 'block';
+                    // Also display the reset folder button if it exists
+                    if (resetFolderBtn) {
+                        resetFolderBtn.style.display = 'block';
+                    }
                     resolve(true);
                 } else {
                     resolve(false);
@@ -2433,7 +2532,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Helper function to update folder info in the UI
     function updateFolderInfoUI(folderName) {
-        const addToLibraryToggle = document.getElementById('addToLibraryToggle');
+        // Use the global variable instead of redeclaring it
         const toggleLabel = document.querySelector('.export-toggle-container .toggle-label');
         
         if (toggleLabel) {
@@ -2762,7 +2861,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Show feedback to the user
         const resetButton = document.getElementById('resetFolderBtn');
-        const addToLibraryBtn = document.getElementById('addToLibraryBtn');
         
         // Visual feedback by briefly changing the button appearance
         if (resetButton) {
@@ -2775,60 +2873,37 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 500);
         }
         
-        // Update the Add to Library button title
-        if (addToLibraryBtn) {
-            addToLibraryBtn.title = "Add to Library";
-        }
-        
-        // Show a toast or alert to confirm reset
-        alert(`Export folder "${folderName}" has been reset. You will be prompted to select a folder next time you export.`);
+        // Log the reset action
+        console.log(`Export folder "${folderName}" has been reset. User will be prompted to select a folder next time they export.`);
     }
 
     // Function to initialize folder persistence
     function initFolderPersistence() {
+        console.log('Initializing folder persistence and Eagle integration');
+        
+        // Get reference to toggle - use the global variable, don't redeclare it
+        addToLibraryToggle = document.getElementById('addToLibraryToggle');
+        
+        // Check if Eagle app is running at startup
+        if (addToLibraryToggle) {
+            // Always default to off regardless of whether Eagle is running or not
+            addToLibraryToggle.checked = false;
+            
+            // Check if Eagle is running (just for logging)
+            isEagleAppRunning().then(isRunning => {
+                console.log('Eagle App running status:', isRunning);
+                
+                // Add listener for toggle change after initial check
+                if (addToLibraryToggle) {
+                    addToLibraryToggle.addEventListener('change', handleToggleChange);
+                }
+            });
+        }
+        
         // Check if we have saved folder data
         const savedData = localStorage.getItem('savedExportFolderData');
         const toggleLabel = document.querySelector('.export-toggle-container .toggle-label');
-        const addToLibraryBtn = document.getElementById('addToLibraryBtn');
-        const addToLibraryToggle = document.getElementById('addToLibraryToggle');
         const resetFolderBtn = document.getElementById('resetFolderBtn');
-        
-        console.log('Initializing folder persistence and Eagle integration');
-        
-        // Check if Eagle App is running on page load
-        isEagleAppRunning().then(isRunning => {
-            console.log(`Eagle App running status: ${isRunning}`);
-            
-            // If the toggle is checked but Eagle is not running, uncheck it
-            if (addToLibraryToggle && addToLibraryToggle.checked && !isRunning) {
-                console.log('Eagle toggle was checked but Eagle is not running - unchecking toggle');
-                addToLibraryToggle.checked = false;
-            }
-            
-            // Update toggle label based on Eagle availability
-            if (isRunning) {
-                if (toggleLabel) {
-                    // Update the toggle label to indicate Eagle is available
-                    toggleLabel.textContent = 'Use Eagle App API';
-                    toggleLabel.title = 'Enable to directly add images to your Eagle library';
-                }
-                
-                if (addToLibraryBtn) {
-                    // Add info about Eagle to the button tooltip
-                    const currentTitle = addToLibraryBtn.title || "Add to Library";
-                    addToLibraryBtn.title = `${currentTitle} (Toggle to use Eagle App)`;
-                }
-                
-                console.log('Eagle App is available for use');
-            } else {
-                console.log('Eagle App is not running - folder selection will be used');
-                
-                // Make sure reset folder button is visible if toggle is unchecked (using folder)
-                if (resetFolderBtn && !addToLibraryToggle.checked) {
-                    resetFolderBtn.style.display = 'inline-block';
-                }
-            }
-        });
         
         if (savedData && 'showDirectoryPicker' in window) {
             try {
@@ -2854,14 +2929,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
                 
-                // Make sure the export toggle container is visible if an image is loaded
-                if (originalImage) {
-                    exportToggleContainer.style.display = 'flex';
-                    resetFolderBtn.style.display = 'block';
-                }
-                
                 // If we're on Chrome, try to pre-obtain the directory handle in the background
-                // This won't work on all browsers but can help reduce the number of prompts in Chrome
                 if (navigator.userAgent.includes('Chrome')) {
                     console.log('Attempting to pre-validate folder access...');
                     
@@ -2898,7 +2966,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const hasPermission = await verifyPermission(folderHandle, true);
             if (!hasPermission) {
                 console.error('Permission denied to write to folder');
-                alert('Permission denied to write to the selected folder.');
+                console.error('Permission denied to write to the selected folder.');
                 return false;
             }
             
@@ -2936,36 +3004,42 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (isRunning) {
                     console.log('Eagle App is running - API integration enabled');
                     if (toggleLabel) {
-                        toggleLabel.textContent = 'Use Eagle App API ✓';
+                        toggleLabel.textContent = 'Add to Eagle Library ✓';
                     }
                     
-                    // Update the Add to Library button title
-                    const addToLibraryBtn = document.getElementById('addToLibraryBtn');
-                    if (addToLibraryBtn) {
-                        addToLibraryBtn.title = "Add to Eagle App Library";
+                    // Update download button tooltips to indicate Eagle integration
+                    const downloadBtn = document.getElementById('downloadBtn');
+                    if (downloadBtn) {
+                        downloadBtn.title = "Download PNG and add to Eagle library";
                     }
                     
-                    // Hide the reset folder button since we're using Eagle API
+                    const exportPsdBtn = document.getElementById('exportPsdBtn');
+                    if (exportPsdBtn) {
+                        // Update tooltip for PSD button to indicate folder selection will be used
+                        exportPsdBtn.title = "Download PSD and save to Eagle library folder";
+                    }
+                    
+                    // Show the reset folder button for PSD folder selection
                     if (resetFolderBtn) {
-                        resetFolderBtn.style.display = 'none';
+                        resetFolderBtn.style.display = 'inline-block';
                     }
                 } else {
                     console.log('Eagle App is not running - disabling API integration');
                     addToLibraryToggle.checked = false;
                     
-                    // Show more detailed error for Mac users
-                    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-                    if (isMac) {
-                        alert('Could not connect to Eagle App. Please make sure:\n\n' +
-                              '1. Eagle App is running on your Mac\n' +
-                              '2. API access is enabled in Eagle App preferences\n' +
-                              '3. No firewall is blocking localhost connections');
-                    } else {
-                        alert('Eagle App is not running. Please start Eagle App and try again.');
+                    if (toggleLabel) {
+                        toggleLabel.textContent = 'Add to Eagle Library';
                     }
                     
-                    if (toggleLabel) {
-                        toggleLabel.textContent = 'Use Eagle App API';
+                    // Reset download button tooltips
+                    const downloadBtn = document.getElementById('downloadBtn');
+                    if (downloadBtn) {
+                        downloadBtn.title = "Download PNG";
+                    }
+                    
+                    const exportPsdBtn = document.getElementById('exportPsdBtn');
+                    if (exportPsdBtn) {
+                        exportPsdBtn.title = "Download PSD";
                     }
                     
                     // Since Eagle is not available, we need to fall back to folder selection
@@ -2978,13 +3052,18 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             // Toggle is unchecked - use folder selection functionality
             if (toggleLabel) {
-                toggleLabel.textContent = 'Use Eagle App API';
+                toggleLabel.textContent = 'Add to Eagle Library';
             }
             
-            // Update the Add to Library button title
-            const addToLibraryBtn = document.getElementById('addToLibraryBtn');
-            if (addToLibraryBtn) {
-                addToLibraryBtn.title = "Add to Library (save to folder)";
+            // Reset download button tooltips
+            const downloadBtn = document.getElementById('downloadBtn');
+            if (downloadBtn) {
+                downloadBtn.title = "Download PNG";
+            }
+            
+            const exportPsdBtn = document.getElementById('exportPsdBtn');
+            if (exportPsdBtn) {
+                exportPsdBtn.title = "Download PSD";
             }
             
             // Show the reset folder button
@@ -3013,91 +3092,494 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Function to try Eagle API communication through an iframe proxy (works around CORS)
-    function sendToEagleViaProxy(imageDataURL, fileName, tags) {
-        console.log('Attempting Eagle API via iframe proxy...');
+    function sendToEagleViaProxy(imageDataURL, fileName, tags, fileType = 'png') {
+        console.log(`Attempting Eagle API via iframe proxy for ${fileType} file...`);
         
-        // Get the iframe
-        const frame = document.getElementById('eagleProxyFrame');
-        if (!frame) {
-            console.error('Eagle proxy iframe not found');
-            return false;
-        }
-        
-        // Eagle App API token
-        const eagleApiToken = '4d1fb3b8-1313-412f-9d74-a86c8c8c5d1c';
-        
-        // Create HTML content with a form that will auto-submit via JavaScript
-        const formHtml = `
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>Eagle API Proxy</title>
-                <script>
-                function submitToEagle() {
-                    const payload = {
-                        url: "${imageDataURL}",
-                        name: "${fileName}",
-                        tags: ${JSON.stringify(tags)},
-                        annotation: "Generated with Auto Borders Tool",
-                        website: "${window.location.href}"
-                    };
-                    
-                    fetch("http://127.0.0.1:41595/api/item/addFromURL", {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                            "Authorization": "Bearer ${eagleApiToken}"
-                        },
-                        body: JSON.stringify(payload)
-                    })
-                    .then(response => {
-                        if (!response.ok) {
-                            throw new Error("Eagle API responded with status: " + response.status);
-                        }
-                        return response.json();
-                    })
-                    .then(data => {
-                        window.parent.postMessage({type: "eagle-success", data: data}, "*");
-                    })
-                    .catch(error => {
-                        window.parent.postMessage({type: "eagle-error", error: error.message}, "*");
-                    });
-                }
-                
-                // Auto-submit when loaded
-                window.onload = submitToEagle;
-                </script>
-            </head>
-            <body>
-                <div>Communicating with Eagle API...</div>
-            </body>
-            </html>
-        `;
-        
-        // Set up message listener for response from iframe
+        // Return a promise to better handle success/failure
         return new Promise((resolve, reject) => {
+            // Get the iframe or create one if it doesn't exist
+            let frame = document.getElementById('eagleProxyFrame');
+            if (!frame) {
+                frame = document.createElement('iframe');
+                frame.id = 'eagleProxyFrame';
+                frame.style.display = 'none';
+                document.body.appendChild(frame);
+            }
+            
+            // Eagle App API token
+            const eagleApiToken = window.eagleConfig ? window.eagleConfig.apiToken : '';
+            
+            // Set up message listener for iframe response
             const messageHandler = function(event) {
-                if (event.data && event.data.type) {
-                    if (event.data.type === 'eagle-success') {
-                        window.removeEventListener('message', messageHandler);
-                        resolve(event.data.data);
-                    } else if (event.data.type === 'eagle-error') {
-                        window.removeEventListener('message', messageHandler);
-                        reject(new Error(event.data.error));
+                if (event.data && event.data.eagleApiResult) {
+                    window.removeEventListener('message', messageHandler);
+                    if (event.data.success) {
+                        console.log('Eagle proxy reported success');
+                        resolve(true);
+                    } else {
+                        console.error('Eagle proxy reported failure:', event.data.error);
+                        reject(new Error(event.data.error || 'Unknown error from Eagle proxy'));
                     }
                 }
             };
             
             window.addEventListener('message', messageHandler);
             
-            // Set timeout to prevent hanging
-            setTimeout(() => {
+            // Set a timeout for the proxy operation
+            const proxyTimeout = setTimeout(() => {
                 window.removeEventListener('message', messageHandler);
-                reject(new Error('Eagle API proxy timed out'));
+                reject(new Error('Eagle proxy operation timed out'));
             }, 10000);
             
-            // Set the HTML content of the iframe
+            // Create HTML content with a form that will auto-submit via JavaScript
+            const formHtml = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Eagle API Proxy</title>
+                    <script>
+                    function submitToEagle() {
+                        const payload = {
+                            url: "${imageDataURL}",
+                            name: "${fileName}",
+                            tags: ${fileType === 'png' ? '[]' : JSON.stringify(tags)},
+                            annotation: "Generated with Auto Borders Tool",
+                            website: "${window.location.href}"
+                        };
+                        
+                        fetch("http://127.0.0.1:41595/api/item/addFromURL", {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                                "Authorization": "Bearer ${eagleApiToken}"
+                            },
+                            body: JSON.stringify(payload)
+                        })
+                        .then(response => {
+                            if (response.ok) {
+                                // Notify the parent window of success
+                                window.parent.postMessage({
+                                    eagleApiResult: true,
+                                    success: true
+                                }, '*');
+                                return response.json();
+                            } else {
+                                throw new Error("Eagle API responded with status: " + response.status);
+                            }
+                        })
+                        .then(data => {
+                            console.log("Eagle API response:", data);
+                        })
+                        .catch(error => {
+                            console.error("Error sending to Eagle:", error);
+                            // Notify the parent window of failure
+                            window.parent.postMessage({
+                                eagleApiResult: true,
+                                success: false,
+                                error: error.message
+                            }, '*');
+                        });
+                    }
+                    
+                    // Execute on page load
+                    window.onload = submitToEagle;
+                    </script>
+                </head>
+                <body>Sending to Eagle...</body>
+                </html>
+            `;
+            
+            // Set the iframe content
             frame.srcdoc = formHtml;
+            
+            return true;
+        });
+    }
+
+    // New function specifically for sending PSDs to Eagle through proxy with special handling
+    function sendToEagleViaProxyForPSD(previewURL, fileName, tags, psdBlob) {
+        console.log(`Attempting Eagle API via iframe proxy for PSD file with preview...`);
+        
+        // Return a promise to better handle success/failure
+        return new Promise((resolve, reject) => {
+            // Get the iframe or create one if it doesn't exist
+            let frame = document.getElementById('eagleProxyFrame');
+            if (!frame) {
+                frame = document.createElement('iframe');
+                frame.id = 'eagleProxyFrame';
+                frame.style.display = 'none';
+                document.body.appendChild(frame);
+            }
+            
+            // Eagle App API token
+            const eagleApiToken = window.eagleConfig ? window.eagleConfig.apiToken : '';
+            
+            // First save the PSD to a temp file using FileSaver
+            if (window.saveAs) {
+                // Convert blob to file for handling in the iframe
+                const file = new File([psdBlob], fileName, {type: 'image/vnd.adobe.photoshop'});
+                
+                // Set up message listener for iframe response
+                const messageHandler = function(event) {
+                    if (event.data && event.data.eagleApiResult) {
+                        window.removeEventListener('message', messageHandler);
+                        if (event.data.success) {
+                            console.log('Eagle proxy reported success for PSD');
+                            resolve(true);
+                        } else {
+                            console.error('Eagle proxy reported failure for PSD:', event.data.error);
+                            reject(new Error(event.data.error || 'Unknown error from Eagle proxy'));
+                        }
+                    }
+                };
+                
+                window.addEventListener('message', messageHandler);
+                
+                // Set a timeout for the proxy operation
+                const proxyTimeout = setTimeout(() => {
+                    window.removeEventListener('message', messageHandler);
+                    reject(new Error('Eagle proxy operation timed out'));
+                }, 15000); // Longer timeout for PSD files
+                
+                // Create HTML content with a form that will use FileReader to handle the PSD
+                const formHtml = `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>Eagle API Proxy for PSD</title>
+                        <script>
+                        function submitToEagle() {
+                            // Use the preview URL for the thumbnail
+                            const payload = {
+                                url: "${previewURL}",
+                                name: "${fileName}",
+                                tags: ${JSON.stringify(tags)},
+                                annotation: "Generated with Auto Borders Tool",
+                                website: "${window.location.href}",
+                                ext: "psd",
+                                mimetype: "image/vnd.adobe.photoshop"
+                            };
+                            
+                            fetch("http://127.0.0.1:41595/api/item/addFromURL", {
+                                method: "POST",
+                                headers: {
+                                    "Content-Type": "application/json",
+                                    "Authorization": "Bearer ${eagleApiToken}"
+                                },
+                                body: JSON.stringify(payload)
+                            })
+                            .then(response => {
+                                if (response.ok) {
+                                    // Notify the parent window of success
+                                    window.parent.postMessage({
+                                        eagleApiResult: true,
+                                        success: true
+                                    }, '*');
+                                    return response.json();
+                                } else {
+                                    throw new Error("Eagle API responded with status: " + response.status);
+                                }
+                            })
+                            .then(data => {
+                                console.log("Eagle API response for PSD:", data);
+                            })
+                            .catch(error => {
+                                console.error("Error sending PSD to Eagle:", error);
+                                // Notify the parent window of failure
+                                window.parent.postMessage({
+                                    eagleApiResult: true,
+                                    success: false,
+                                    error: error.message
+                                }, '*');
+                            });
+                        }
+                        
+                        // Execute on page load
+                        window.onload = submitToEagle;
+                        </script>
+                    </head>
+                    <body>Sending PSD to Eagle...</body>
+                    </html>
+                `;
+                
+                // Set the iframe content
+                frame.srcdoc = formHtml;
+            } else {
+                reject(new Error('FileSaver.js not available'));
+            }
+        });
+    }
+
+    // New function for sending PSD files to Eagle with a reliable approach
+    function sendPsdToEagle(psdFile, previewDataURL, fileName, metadata) {
+        console.log('Using improved approach for PSD to Eagle transfer...');
+        
+        // Display a processing message
+        const processingMessage = document.createElement('div');
+        processingMessage.className = 'processing-message';
+        processingMessage.innerHTML = `
+            <div class="processing-content">
+                <div class="spinner"></div>
+                <div>Sending PSD to Eagle...</div>
+            </div>
+        `;
+        document.body.appendChild(processingMessage);
+        
+        // Create a Blob URL from the preview for the thumbnail
+        const previewBlob = dataURLtoBlob(previewDataURL);
+        const previewURL = URL.createObjectURL(previewBlob);
+        
+        // Create a separate File object for the PSD to ensure it's handled correctly
+        const psdFileObj = new File([psdFile], fileName, {
+            type: 'image/vnd.adobe.photoshop'
+        });
+        
+        // Convert the PSD to a blob URL
+        const psdBlobURL = URL.createObjectURL(psdFileObj);
+        
+        try {
+            // Use Eagle's application protocol link instead of direct API calls
+            // This bypasses CORS restrictions by opening Eagle directly
+            
+            // Format tags for Eagle
+            const tagsString = metadata.tags.join(',');
+            
+            // Create the Eagle application link
+            const eagleAppLink = `eagle://item/add?url=${encodeURIComponent(psdBlobURL)}&name=${encodeURIComponent(fileName)}&tags=${encodeURIComponent(tagsString)}&ext=psd&annotation=${encodeURIComponent(metadata.annotation)}`;
+            
+            console.log('Opening Eagle with app link:', eagleAppLink);
+            
+            // Create a hidden iframe to open the Eagle app link
+            const eagleFrame = document.createElement('iframe');
+            eagleFrame.style.display = 'none';
+            eagleFrame.src = eagleAppLink;
+            document.body.appendChild(eagleFrame);
+            
+            // Remove the iframe after a delay
+            setTimeout(() => {
+                if (document.body.contains(eagleFrame)) {
+                    document.body.removeChild(eagleFrame);
+                }
+            }, 2000);
+            
+            // Remove the processing message after a delay and show success message
+            setTimeout(() => {
+                if (document.body.contains(processingMessage)) {
+                    document.body.removeChild(processingMessage);
+                }
+                
+                // Clean up blob URLs
+                URL.revokeObjectURL(previewURL);
+                URL.revokeObjectURL(psdBlobURL);
+            }, 3000);
+            
+        } catch (error) {
+            console.error('Error sending PSD to Eagle:', error);
+            
+            // Remove the processing message
+            if (document.body.contains(processingMessage)) {
+                document.body.removeChild(processingMessage);
+            }
+            
+            // Clean up blob URLs
+            URL.revokeObjectURL(previewURL);
+            URL.revokeObjectURL(psdBlobURL);
+        }
+    }
+    
+    // Utility function to convert a data URL to a Blob object
+    function dataURLtoBlob(dataURL) {
+        const parts = dataURL.split(';base64,');
+        const contentType = parts[0].split(':')[1];
+        const raw = window.atob(parts[1]);
+        const rawLength = raw.length;
+        const uInt8Array = new Uint8Array(rawLength);
+        
+        for (let i = 0; i < rawLength; ++i) {
+            uInt8Array[i] = raw.charCodeAt(i);
+        }
+        
+        return new Blob([uInt8Array], { type: contentType });
+    }
+
+    // Add this function to directly open the last created PSD in Eagle
+    function openLastPsdInEagle() {
+        if (!lastCreatedPsdData) {
+            alert('No PSD has been created yet. Create a PSD first by clicking "Download PSD".');
+            return;
+        }
+        
+        // Create a blob from the PSD buffer
+        const blob = new Blob([lastCreatedPsdData.buffer], { type: 'image/vnd.adobe.photoshop' });
+        
+        // First check if Eagle app is running
+        isEagleAppRunning()
+            .then(isRunning => {
+                if (!isRunning) {
+                    alert('Eagle app is not running. Please start Eagle and try again.');
+                    return;
+                }
+                
+                // Display a processing message
+                const processingMessage = document.createElement('div');
+                processingMessage.className = 'processing-message';
+                processingMessage.innerHTML = `
+                    <div class="processing-content">
+                        <div class="spinner"></div>
+                        <div>Sending PSD to Eagle...</div>
+                    </div>
+                `;
+                document.body.appendChild(processingMessage);
+                
+                // Upload to temporary hosting first
+                uploadPsdToTempHost(blob, lastCreatedPsdData.fileName)
+                    .then(uploadResult => {
+                        // Log the URL for the manually opened PSD
+                        console.log('Opening saved PSD in Eagle - URL:', uploadResult.url);
+                        console.log('[MANUAL OPEN] PSD URL:', uploadResult.url);
+                        
+                        // Now import to Eagle using the URL
+                        return tryDirectEagleAPI(uploadResult.url, lastCreatedPsdData.fileName, lastCreatedPsdData.tags, 'psd')
+                            .then(() => {
+                                // Delete the temp file after successful import
+                                return deleteTempFile(uploadResult.key);
+                            })
+                            .then(deleteSuccess => {
+                                // Remove processing message
+                                if (document.body.contains(processingMessage)) {
+                                    document.body.removeChild(processingMessage);
+                                }
+                                
+                                // Show success message
+                                alert('PSD file successfully imported to Eagle library!');
+                            });
+                    })
+                    .catch(error => {
+                        console.error('Error in PSD upload process:', error);
+                        
+                        // Remove processing message
+                        if (document.body.contains(processingMessage)) {
+                            document.body.removeChild(processingMessage);
+                        }
+                        
+                        alert('Failed to send PSD to Eagle. Please ensure Eagle is running with API access enabled.');
+                    });
+            })
+            .catch(error => {
+                console.error('Error checking if Eagle is running:', error);
+            });
+    }
+
+    // Temporary storage functionality has been removed
+
+    // New function to handle PSD folder selection for Eagle
+    function handlePsdFolderSelection(blob, fileName, psdBuffer, previewDataURL, metadata) {
+        // Check if we already have a saved folder
+        const savedFolderHandle = getSavedDirectoryHandle();
+        
+        if (savedFolderHandle) {
+            // Use existing folder
+            exportPsdToSelectedFolder(savedFolderHandle, blob, fileName);
+        } else {
+            // Check if we have saved data but no handle
+            const savedData = localStorage.getItem('savedExportFolderData');
+            
+            if (savedData) {
+                // Try to auto-select the folder
+                selectExportFolderAuto().then(folderHandle => {
+                    if (folderHandle) {
+                        // Save the selected handle for future use
+                        saveDirectoryHandle(folderHandle);
+                        exportPsdToSelectedFolder(folderHandle, blob, fileName);
+                    } else {
+                        // If auto-selection fails, prompt the user
+                        promptForFolderAndExportPsd(blob, fileName);
+                    }
+                }).catch(error => {
+                    console.error('Error auto-selecting folder:', error);
+                    promptForFolderAndExportPsd(blob, fileName);
+                });
+            } else {
+                // No saved folder, prompt user
+                promptForFolderAndExportPsd(blob, fileName);
+            }
+        }
+    }
+
+    // Function to export PSD to a selected folder
+    async function exportPsdToSelectedFolder(folderHandle, blob, fileName) {
+        if (!folderHandle) {
+            console.error('No folder handle provided');
+            alert('Error: No folder selected. Please try again and select a folder.');
+            return;
+        }
+        
+        // First check if we have write permission for the folder
+        try {
+            const hasPermission = await verifyPermission(folderHandle, true);
+            if (!hasPermission) {
+                console.error('Permission denied to write to folder');
+                alert('Permission denied to write to the selected folder. Please select the folder again.');
+                promptForFolderAndExportPsd(blob, fileName);
+                return;
+            }
+        } catch (permError) {
+            console.error('Error checking folder permissions:', permError);
+            alert('Error checking folder permissions. Please try selecting the folder again.');
+            promptForFolderAndExportPsd(blob, fileName);
+            return;
+        }
+        
+        // Now try to write the file to the selected folder
+        try {
+            // Create a file in the directory
+            const fileHandle = await folderHandle.getFileHandle(fileName, { create: true });
+            
+            // Get a writable stream to the file
+            const writable = await fileHandle.createWritable();
+            
+            // Write the blob to the file
+            await writable.write(blob);
+            
+            // Close the file
+            await writable.close();
+            
+            console.log(`PSD file '${fileName}' has been saved to both Downloads folder and Eagle library folder: ${folderHandle.name}`);
+        } catch (fileError) {
+            console.error('Error writing file to selected folder:', fileError);
+            
+            // Check for specific errors
+            if (fileError.name === 'NotAllowedError') {
+                console.error(`Permission error: Could not write to "${folderHandle.name}" folder. The folder selection will be reset.`);
+                resetExportFolder();
+                promptForFolderAndExportPsd(blob, fileName);
+            } else if (fileError.name === 'NoModificationAllowedError') {
+                console.error(`The folder "${folderHandle.name}" is read-only. Please select a different folder.`);
+                promptForFolderAndExportPsd(blob, fileName);
+            } else {
+                // Generic error, already downloaded to Downloads folder
+                console.error(`Could not save to "${folderHandle.name}" folder (${fileError.message}). The PSD file is still in Downloads folder.`);
+            }
+        }
+    }
+
+    // Function to prompt for folder and then export the PSD
+    function promptForFolderAndExportPsd(blob, fileName) {
+        selectExportFolder().then(folderHandle => {
+            if (folderHandle) {
+                // Save the selected handle for future use
+                saveDirectoryHandle(folderHandle);
+                // Update UI to reflect the selected folder
+                updateFolderInfoUI(folderHandle.name);
+                // Export PSD to the selected folder
+                exportPsdToSelectedFolder(folderHandle, blob, fileName);
+            } else {
+                // User cancelled, but the file is already downloaded to Downloads folder
+                console.log('Folder selection cancelled. The PSD file is still in Downloads folder.');
+            }
+        }).catch(error => {
+            console.error('Error selecting folder:', error);
+            console.error(`Failed to select folder: ${error.message}. The PSD file is still in Downloads folder.`);
         });
     }
 }); 

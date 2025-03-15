@@ -552,3 +552,31 @@ input[type="checkbox"] {
 .export-toggle-container {
     display: none;
 }
+
+.secondary-btn {
+    background-color: #f1f1f1;
+    color: #333;
+    border: 1px solid #ccc;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.secondary-btn:hover {
+    background-color: #e0e0e0;
+}
+
+.help-text {
+    font-size: 12px;
+    color: #666;
+    margin-left: 8px;
+}
+
+#eagleFallbackContainer {
+    display: flex;
+    align-items: center;
+    margin-top: 10px;
+}

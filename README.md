@@ -34,4 +34,29 @@ The tool supports direct integration with Eagle App for quick saving of processe
 
 ## License
 
-MIT License 
+MIT License
+
+## Setup
+
+### Eagle API Integration
+
+This tool can integrate with Eagle App for directly adding images to your library. To set up the Eagle API integration:
+
+1. Copy `config.sample.js` to `config.js`
+2. Open `config.js` in a text editor
+3. Replace `YOUR_EAGLE_API_TOKEN_HERE` with your actual Eagle API token
+4. Save the file
+
+### Getting Your Eagle API Token
+
+To find your Eagle API token:
+
+1. Open Eagle App
+2. Go to Preferences / Settings
+3. Navigate to the API tab
+4. Enable the API service if it's not already enabled
+5. Copy your API token
+
+### Security Note
+
+The `config.js` file is ignored by git (listed in `.gitignore`), so your API token won't be committed to version control. However, make sure not to share your `config.js` file with others. 

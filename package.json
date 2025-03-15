@@ -1,0 +1,25 @@
+{
+  "name": "auto-borders",
+  "version": "1.0.0",
+  "description": "Web application hosting multiple graphic tools, including organic border generation",
+  "main": "index.js",
+  "scripts": {
+    "start": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "keywords": [
+    "border",
+    "graphic",
+    "design",
+    "tools"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "file-saver": "^2.0.5"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  }
+} 

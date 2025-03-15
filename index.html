@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Polygon Border Generator</title>
+    <title>Organic Borders Generator</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="assets/epicuts-logo-white.png" type="image/png">
 </head>
 <body>
     <div class="container">
@@ -20,7 +21,7 @@
                                 </svg>
                                 Select Image
                             </button>
-                            <input type="file" id="imageUpload" accept="image/png" class="file-upload">
+                            <input type="file" id="imageUpload" accept="image/png,image/vnd.adobe.photoshop,application/photoshop,application/x-photoshop,.psd" class="file-upload">
                         </div>
                     </div>
                 </div>
@@ -43,18 +44,18 @@
                     <div class="panel-header">Border Settings</div>
                     <div class="panel-content">
                         <div class="control-group">
-                            <label>Shape Simplification</label>
-                            <div class="slider-container">
-                                <input type="range" id="simplificationRange" class="slider" min="1" max="50" value="18" step="1">
-                                <span class="slider-value" id="simplificationValue">18</span>
-                            </div>
-                        </div>
-                        
-                        <div class="control-group">
                             <label>Thickness</label>
                             <div class="slider-container">
                                 <input type="range" id="thicknessRange" class="slider" min="0" max="500" value="46" step="1">
                                 <span class="slider-value" id="thicknessValue">46</span>
+                            </div>
+                        </div>
+                        
+                        <div class="control-group">
+                            <label>Shape Simplification</label>
+                            <div class="slider-container">
+                                <input type="range" id="simplificationRange" class="slider" min="1" max="50" value="18" step="1">
+                                <span class="slider-value" id="simplificationValue">18</span>
                             </div>
                         </div>
                         
@@ -126,13 +127,8 @@
                         <label class="toggle">
                             <input type="checkbox" id="addToLibraryToggle">
                             <span class="toggle-slider"></span>
-                            <span class="toggle-label">Use Eagle App API</span>
+                            <span class="toggle-label">Add to Eagle Library</span>
                         </label>
-                        <button id="resetFolderBtn" class="icon-btn" title="Change library folder" style="display: none;">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M3 5H9L10 7H21V19H3V5Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                            </svg>
-                        </button>
                     </div>
                     
                     <button id="downloadBtn" class="download-btn" style="display: none;">
@@ -141,10 +137,6 @@
                     
                     <button id="exportPsdBtn" class="download-btn" style="display: none; ">
                         Download PSD
-                    </button>
-                    
-                    <button id="addToLibraryBtn" class="download-btn" style="display: none;" title="Add to Library">
-                        Add to Library
                     </button>
                 </div>
             </div>
@@ -169,6 +161,8 @@
     <!-- Hidden iframe for Eagle API communication (works around CORS) -->
     <iframe id="eagleProxyFrame" style="display:none;"></iframe>
     
+    <!-- Configuration file with API keys (load before main script) -->
+    <script src="config.js"></script>
     <script src="script.js"></script>
 </body>
 </html> 
