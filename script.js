@@ -163,6 +163,9 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('dragover', handleDragOver); // Allow drag anywhere on the page
     document.addEventListener('drop', handleDrop);
     
+    // Add clipboard paste event listener (Cmd+V / Ctrl+V)
+    document.addEventListener('paste', handleClipboardPaste);
+    
     // Thickness slider with regular functionality
     thicknessRange.addEventListener('input', (e) => {
         currentThickness = parseInt(e.target.value);
@@ -3581,5 +3584,85 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Error selecting folder:', error);
             console.error(`Failed to select folder: ${error.message}. The PSD file is still in Downloads folder.`);
         });
+    }
+
+    // Handle clipboard paste (Cmd+V / Ctrl+V)
+    function handleClipboardPaste(e) {
+        // Check if clipboard contains image data
+        const items = e.clipboardData.items;
+        
+        for (let i = 0; i < items.length; i++) {
+            // Check if the clipboard item is an image
+            if (items[i].type.indexOf('image') !== -1) {
+                // Get the image as a Blob
+                const blob = items[i].getAsFile();
+                
+                // Create a FileReader to read the blob
+                const reader = new FileReader();
+                
+                reader.onload = function(event) {
+                    const img = new Image();
+                    img.onload = function() {
+                        // Add padding to prevent clipping
+                        const padding = 20; // 20px padding on all sides
+                        
+                        // Set canvas dimensions with padding
+                        imageCanvas.width = img.width + (padding * 2);
+                        imageCanvas.height = img.height + (padding * 2);
+                        borderCanvas.width = img.width + (padding * 2);
+                        borderCanvas.height = img.height + (padding * 2);
+                        
+                        // Create or resize control points canvas
+                        if (controlPointsCanvas) {
+                            controlPointsCanvas.width = imageCanvas.width;
+                            controlPointsCanvas.height = imageCanvas.height;
+                        } else if (edgeSelectionMode) {
+                            createControlPointsCanvas();
+                        }
+                        
+                        // Clear all canvases
+                        imageCtx.clearRect(0, 0, imageCanvas.width, imageCanvas.height);
+                        borderCtx.clearRect(0, 0, borderCanvas.width, borderCanvas.height);
+                        if (controlPointsCtx) {
+                            controlPointsCtx.clearRect(0, 0, controlPointsCanvas.width, controlPointsCanvas.height);
+                        }
+                        
+                        // Draw image on canvas with padding
+                        imageCtx.drawImage(img, padding, padding, img.width, img.height);
+                        
+                        // Store the original image and padding info
+                        originalImage = img;
+                        originalImage.padding = padding;
+                        
+                        // Apply filters if enabled (including shadow after border detection)
+                        applyImageFilters();
+                        
+                        // Hide the placeholder
+                        if (uploadPlaceholder) {
+                            uploadPlaceholder.style.display = 'none';
+                        }
+                        
+                        // Show all control panels
+                        controls.style.display = 'block';
+                        imageFilters.style.display = 'block';
+                        shadowSettings.style.display = 'block';
+                        edgeSelectionPanel.style.display = 'block';
+                        downloadBtn.style.display = 'block';
+                        exportPsdBtn.style.display = 'block';
+                        exportToggleContainer.style.display = 'flex';
+                        
+                        // Update folder information in UI if available
+                        updateFolderInfo();
+                    };
+                    img.src = event.target.result;
+                };
+                
+                reader.readAsDataURL(blob);
+                
+                // Prevent the default paste behavior
+                e.preventDefault();
+                return;
+            }
+        }
     }
 }); 

@@ -296,32 +296,54 @@ input[type="color"] {
 
 /* Upload button */
 .upload-container {
-    margin-top: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
 .upload-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 0.5rem;
-    width: 100%;
-    padding: 0.5rem;
+    gap: 8px;
+    padding: 0.6rem 1rem;
     background-color: var(--primary-color);
     color: white;
     border: none;
     border-radius: 4px;
+    cursor: pointer;
     font-size: 0.9rem;
     font-weight: 500;
-    cursor: pointer;
-    transition: background-color 0.2s;
+    width: 100%;
 }
 
 .upload-btn:hover {
-    background-color: #3a80d2;
+    opacity: 0.9;
 }
 
 .file-upload {
     display: none;
+}
+
+.paste-hint {
+    text-align: center;
+    font-size: 0.75rem;
+    color: #6c757d;
+    margin-top: 4px;
+}
+
+.paste-hint kbd {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 3px;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.1);
+    display: inline-block;
+    font-family: Monaco, Menlo, monospace;
+    font-size: 0.7rem;
+    font-weight: 600;
+    line-height: 1;
+    padding: 2px 4px;
+    margin: 0 2px;
 }
 
 /* Download button */
