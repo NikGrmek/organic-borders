@@ -8,28 +8,34 @@
     <link rel="icon" href="assets/epicuts-logo-white.png" type="image/png">
 </head>
 <body>
+    <div class="top-bar">
+        <div id="image-dimensions" class="image-dimensions"></div>
+        <div id="export-buttons">
+            <button id="downloadBtn" class="download-btn" style="display: none;">
+                Download PNG
+            </button>
+            
+            <button id="exportPsdBtn" class="download-btn" style="display: none; ">
+                Download PSD
+            </button>
+        </div>
+    </div>
     <div class="container">
         <div class="main-content">
             <div class="sidebar">
-                <div class="panel" id="upload-panel">
-                    <div class="panel-header">Image Upload</div>
-                    <div class="panel-content">
-                        <div class="upload-container">
-                            <button id="selectImage" class="upload-btn">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M12 4V20M4 12H20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                                </svg>
-                                Select Image
+                <div class="tools-container" id="tools-container" style="display: none;">
+                    <div class="tool-section" id="background-removal-section">
+                        <div class="control-group">
+                            <button id="removeBackground" class="upload-btn" style="display: none;">
+                                Remove Background
                             </button>
-                            <input type="file" id="imageUpload" accept="image/png,image/vnd.adobe.photoshop,application/photoshop,application/x-photoshop,.psd" class="file-upload">
-                            <div class="paste-hint">or press <kbd>Cmd</kbd>+<kbd>V</kbd> to paste from clipboard</div>
                         </div>
                     </div>
-                </div>
-                
-                <div class="panel" id="edge-selection-panel" style="display: none;">
-                    <div class="panel-header">Edge Selection</div>
-                    <div class="panel-content">
+                    
+                    <div class="tool-separator"></div>
+                    
+                    <div class="tool-section" id="edge-selection-section">
+                        <div class="section-title">Edge Selection</div>
                         <div class="control-group">
                             <label>Edge Selection Mode</label>
                             <label class="toggle">
@@ -39,11 +45,11 @@
                             </label>
                         </div>
                     </div>
-                </div>
-                
-                <div class="panel" id="controls" style="display: none;">
-                    <div class="panel-header">Border Settings</div>
-                    <div class="panel-content">
+                    
+                    <div class="tool-separator"></div>
+                    
+                    <div class="tool-section" id="border-settings-section">
+                        <div class="section-title">Border Settings</div>
                         <div class="control-group">
                             <label>Thickness</label>
                             <div class="slider-container">
@@ -59,20 +65,12 @@
                                 <span class="slider-value" id="simplificationValue">18</span>
                             </div>
                         </div>
-                        
-                        <div class="control-group">
-                            <label>Border Color</label>
-                            <div class="color-container">
-                                <input type="color" id="borderColor" value="#FFFFFF">
-                                <span>Color</span>
-                            </div>
-                        </div>
                     </div>
-                </div>
-                
-                <div class="panel" id="image-filters" style="display: none;">
-                    <div class="panel-header">Image Filters</div>
-                    <div class="panel-content">
+                    
+                    <div class="tool-separator"></div>
+                    
+                    <div class="tool-section" id="image-filters-section">
+                        <div class="section-title">Image Filters</div>
                         <div class="control-group">
                             <label>Black & White</label>
                             <label class="toggle">
@@ -80,30 +78,12 @@
                                 <span class="toggle-slider"></span>
                             </label>
                         </div>
-                        
-                        <div id="bwFilterControls">
-                            <div class="control-group">
-                                <label>Black Point</label>
-                                <div class="slider-container">
-                                    <input type="range" id="blackPointRange" class="slider" min="0" max="254" value="0" step="1">
-                                    <span class="slider-value" id="blackPointValue">0</span>
-                                </div>
-                            </div>
-                            
-                            <div class="control-group">
-                                <label>White Point</label>
-                                <div class="slider-container">
-                                    <input type="range" id="whitePointRange" class="slider" min="1" max="255" value="255" step="1">
-                                    <span class="slider-value" id="whitePointValue">255</span>
-                                </div>
-                            </div>
-                        </div>
                     </div>
-                </div>
-                
-                <div class="panel" id="shadow-settings" style="display: none;">
-                    <div class="panel-header">Shadow Settings</div>
-                    <div class="panel-content">
+                    
+                    <div class="tool-separator"></div>
+                    
+                    <div class="tool-section" id="shadow-settings-section">
+                        <div class="section-title">Shadow Settings</div>
                         <div class="control-group">
                             <label>Shadow Size</label>
                             <div class="slider-container">
@@ -122,24 +102,6 @@
                         </div>
                     </div>
                 </div>
-                
-                <div id="export-buttons">
-                    <div class="export-toggle-container">
-                        <label class="toggle">
-                            <input type="checkbox" id="addToLibraryToggle">
-                            <span class="toggle-slider"></span>
-                            <span class="toggle-label">Add to Eagle Library</span>
-                        </label>
-                    </div>
-                    
-                    <button id="downloadBtn" class="download-btn" style="display: none;">
-                        Download PNG
-                    </button>
-                    
-                    <button id="exportPsdBtn" class="download-btn" style="display: none; ">
-                        Download PSD
-                    </button>
-                </div>
             </div>
             
             <div class="canvas-area">
@@ -147,7 +109,21 @@
                     <canvas id="imageCanvas"></canvas>
                     <canvas id="borderCanvas"></canvas>
                 </div>
-                <div class="upload-placeholder">Upload an image to begin editing</div>
+                <div class="upload-placeholder">
+                    <div class="upload-interface">
+                        <button id="selectImage" class="upload-btn">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M12 4V20M4 12H20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                            Upload Image
+                        </button>
+                        <input type="file" id="imageUpload" accept="image/png,image/vnd.adobe.photoshop,application/photoshop,application/x-photoshop,.psd" class="file-upload">
+                        <div class="upload-text">
+                            <p>Click to upload an image or drag and drop</p>
+                            <p class="paste-hint">You can also press <kbd>Cmd</kbd>+<kbd>V</kbd> to paste from clipboard</p>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

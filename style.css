@@ -8,7 +8,7 @@
 :root {
     --primary-color: #21252A;
     --text-color: #333;
-    --bg-color: #f8f9fa;
+    --bg-color: #F5F5F5;
     --panel-bg: #ffffff;
     --border-color: #eeeeee;
     --slider-bg: #e9ecef;
@@ -19,7 +19,7 @@
 }
 
 body {
-    background-color: var(--panel-color);
+    background-color: var(--bg-color);
     color: var(--text-color);
     font-size: 14px;
     line-height: 1.5;
@@ -27,11 +27,36 @@ body {
     overflow-x: hidden;
 }
 
+.top-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 50px;
+    background-color: #FCFCFC;
+    z-index: 1000;
+    border-bottom: 1px solid #E8E8E8;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+}
+
+.image-dimensions {
+    font-size: 0.8rem;
+    color: #6c757d;
+    font-weight: 500;
+    display: none;
+    align-items: center;
+    gap: 4px;
+}
+
 .container {
     display: flex;
     flex-direction: column;
     min-height: 100vh;
     width: 100%;
+    margin-top: 50px;
 }
 
 header {
@@ -78,15 +103,12 @@ header h1 {
     display: flex;
     justify-content: center;
     align-items: center;
-    background-color: var(--canvas-bg);
-    background-image: 
-      linear-gradient(45deg, var(--checker-color1) 25%, transparent 25%), 
-      linear-gradient(-45deg, var(--checker-color1) 25%, transparent 25%), 
-      linear-gradient(45deg, transparent 75%, var(--checker-color1) 75%), 
-      linear-gradient(-45deg, transparent 75%, var(--checker-color1) 75%);
+    background-color: #FCFCFC;
+    background-image: radial-gradient(circle, #E8E8E8 1.5px, transparent 1.5px);
     background-size: 20px 20px;
-    background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+    background-position: 0 0;
     border-radius: 12px;
+    border: 1.5px solid #E8E8E8;
     overflow: hidden;
     min-height: 400px;
     position: relative;
@@ -102,12 +124,73 @@ header h1 {
     text-align: center;
     width: 100%;
     padding: 0 2rem;
+    z-index: 15; /* Ensure it appears above canvas elements */
+}
+
+.upload-interface {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    max-width: 300px;
+    margin: 0 auto;
+}
+
+.upload-interface .upload-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 1rem 2rem;
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 500;
+    width: auto;
+    min-width: 200px;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.upload-interface .upload-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    background-color: #1a1e23;
+}
+
+.upload-interface .upload-btn svg {
+    width: 20px;
+    height: 20px;
+}
+
+.upload-text {
+    text-align: center;
+}
+
+.upload-text p {
+    margin: 0 0 0.5rem 0;
+    color: #6c757d;
+    font-size: 0.9rem;
+}
+
+.upload-text p:last-child {
+    margin-bottom: 0;
+}
+
+.upload-text .paste-hint {
+    font-size: 0.8rem;
+    color: #8a9199;
+    margin-top: 0;
 }
 
 .panel {
     background-color: var(--panel-bg);
     overflow: hidden;
     border: 1px solid var(--slider-bg);
+    border-radius: 14px;
 }
 
 .panel-header {
@@ -116,10 +199,64 @@ header h1 {
     font-weight: 600;
     font-size: 0.9rem;
     border-bottom: 1px solid var(--border-color);
+    background-color: #F8F9FA;
 }
 
 .panel-content {
     padding: 1rem;
+}
+
+/* Tools container and sections */
+.tools-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin-top: 1rem;
+}
+
+.tool-section {
+    padding: 1.5rem 0 1rem 0;
+}
+
+.tool-section:first-child {
+    padding-top: 1rem;
+}
+
+.tool-section:last-child {
+    padding-bottom: 1.5rem;
+}
+
+.tool-separator {
+    height: 1.5px;
+    margin: 1rem 0;
+    position: relative;
+    overflow: hidden;
+}
+
+.tool-separator::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1.5px;
+    background: repeating-linear-gradient(
+        to right,
+        #E8E8E8 0px,
+        #E8E8E8 6px,
+        transparent 6px,
+        transparent 12px
+    );
+}
+
+.section-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #1D1C1B;
+    margin-bottom: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 0;
 }
 
 .control-group {
@@ -127,6 +264,7 @@ header h1 {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+    align-items: flex-start;
 }
 
 .control-group:last-child {
@@ -137,6 +275,8 @@ label {
     font-size: 0.8rem;
     font-weight: 500;
     color: #6c757d;
+    margin: 0;
+    padding: 0;
 }
 
 /* Toggle switch */
@@ -145,6 +285,9 @@ label {
     display: inline-flex;
     align-items: center;
     cursor: pointer;
+    align-self: flex-start;
+    margin: 0 0 0 -1rem;
+    padding: 0;
 }
 
 .toggle input {
@@ -396,6 +539,7 @@ canvas {
     top: 0;
     left: 0;
     pointer-events: none;
+    filter: drop-shadow(0px 0px 8px rgba(0, 0, 0, 0.15));
 }
 
 .canvas-container {
@@ -483,15 +627,19 @@ input[type="checkbox"] {
 
 #export-buttons {
     display: flex;
-    flex-direction: column;
-    gap: 4px;
-
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
     height: fit-content;
 }
 
 #export-buttons button {
-    padding-block: 12px;
+    padding: 6px 12px;
     margin: 0;
+    white-space: nowrap;
+    font-size: 0.8rem;
+    height: 32px;
+    width: auto;
 }
 
 #addToLibraryBtn {
@@ -541,12 +689,13 @@ input[type="checkbox"] {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 10px;
+    margin-bottom: 0;
     background-color: #f8f9fa;
-    padding: 10px 12px;
-    border-radius: 8px;
+    padding: 6px 8px;
+    border-radius: 6px;
     flex-wrap: nowrap;
     border: 1px solid var(--border-color);
+    height: 32px;
 }
 
 .export-toggle-container .toggle {
@@ -558,9 +707,9 @@ input[type="checkbox"] {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 160px;
+    max-width: 120px;
     color: #444;
-    font-size: 0.85rem;
+    font-size: 0.75rem;
 }
 
 .export-toggle-container .icon-btn {
@@ -568,11 +717,6 @@ input[type="checkbox"] {
     height: 32px;
     margin-left: 8px;
     flex-shrink: 0; /* Prevent the button from shrinking */
-}
-
-/* Hide the toggle container by default */
-.export-toggle-container {
-    display: none;
 }
 
 .secondary-btn {

@@ -59,4 +59,10 @@ To find your Eagle API token:
 
 ### Security Note
 
-The `config.js` file is ignored by git (listed in `.gitignore`), so your API token won't be committed to version control. However, make sure not to share your `config.js` file with others. 
+The `config.js` file is ignored by git (listed in `.gitignore`), so your API token won't be committed to version control. However, make sure not to share your `config.js` file with others.
+
+## Configuration
+
+1. Copy `config.sample.js` to `config.js`
+2. Replace the placeholder Hugging Face token in `config.js` with your own token
+3. Make sure not to commit your `config.js` file to version control 

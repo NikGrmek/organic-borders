@@ -33,4 +33,7 @@ ehthumbs.db
 Thumbs.db
 
 # API Key configuration file
-config.js 
+config.js
+
+# Ignore all log files
+*.log 

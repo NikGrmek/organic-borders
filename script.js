@@ -1,6 +1,169 @@
+// Import the Gradio client from CDN using dynamic import for compatibility
+let Client;
+(async function() {
+    try {
+        const module = await import("https://cdn.jsdelivr.net/npm/@gradio/client/dist/index.min.js");
+        Client = module.Client;
+    } catch (error) {
+        console.error("Error importing Gradio client:", error);
+    }
+})();
+
+// Constants
+const SPACE_NAME = "grmeknik/internal-background-removal";
+let HF_TOKEN; // Will be loaded from config
+
+// Load configuration
+fetch('config.js')
+    .then(response => response.text())
+    .then(text => {
+        // Remove any "export" statements and evaluate the config
+        const configText = text.replace(/export\s+const/g, 'const');
+        eval(configText);
+        HF_TOKEN = config.HF_TOKEN;
+    })
+    .catch(error => {
+        console.error("Error loading configuration:", error);
+        alert("Please make sure to create a config.js file with your Hugging Face token.");
+    });
+
+/**
+ * Removes the background from an image using the Hugging Face API
+ * @param {File|Blob} imageFile - The image file to process
+ * @returns {Promise<string>} - A promise that resolves to the URL of the processed image
+ */
+async function removeBackground(imageFile) {
+    if (!imageFile) {
+        throw new Error("No image provided");
+    }
+
+    // Connect to Hugging Face Space
+    const client = await Client.connect(SPACE_NAME, {
+        hf_token: HF_TOKEN
+    });
+    
+    // Call the API with the uploaded image
+    const result = await client.predict("/png", { 
+        f: imageFile
+    });
+    
+    console.log("API Response:", result.data);
+    
+    // Process the result
+    if (!result.data) {
+        throw new Error("No data received from API");
+    }
+    
+    try {
+        // Handle array response format (most common from this API)
+        if (Array.isArray(result.data) && result.data.length > 0) {
+            const fileData = result.data[0];
+            
+            // If the API returns binary data directly
+            if (fileData instanceof Blob) {
+                return URL.createObjectURL(fileData);
+            }
+            
+            // If API returns a URL, we need to fetch that data
+            if (fileData.url) {
+                // For Hugging Face Spaces, we need to fetch the data through the client
+                try {
+                    // Use fetch directly if the URL is accessible
+                    const response = await fetch(fileData.url, {
+                        headers: {
+                            'Authorization': `Bearer ${HF_TOKEN}`
+                        }
+                    });
+                    
+                    if (!response.ok) {
+                        // If direct fetch fails, try to get the file through the client
+                        const blob = await client.view_file(fileData.path);
+                        return URL.createObjectURL(blob);
+                    }
+                    
+                    const blob = await response.blob();
+                    return URL.createObjectURL(blob);
+                } catch (fetchError) {
+                    console.error("Error fetching the processed image:", fetchError);
+                    
+                    // Try an alternative approach using the client's view_file method
+                    try {
+                        if (fileData.path) {
+                            const blob = await client.view_file(fileData.path);
+                            return URL.createObjectURL(blob);
+                        }
+                    } catch (viewError) {
+                        console.error("Error viewing file through client:", viewError);
+                    }
+                    
+                    // Fallback to original image if all attempts fail
+                    console.warn("Could not access processed image, using original");
+                    const reader = new FileReader();
+                    return new Promise((resolve) => {
+                        reader.onload = () => resolve(reader.result);
+                        reader.readAsDataURL(imageFile);
+                    });
+                }
+            }
+            
+            // If we have neither blob nor URL, fallback to original
+            const reader = new FileReader();
+            return new Promise((resolve) => {
+                reader.onload = () => resolve(reader.result);
+                reader.readAsDataURL(imageFile);
+            });
+        }
+        // Handle blob format
+        else if (result.data instanceof Blob) {
+            return URL.createObjectURL(result.data);
+        } 
+        // Handle string URL or data URL
+        else if (typeof result.data === 'string') {
+            // If it's a data URL, we can use it directly
+            if (result.data.startsWith('data:')) {
+                return result.data;
+            } 
+            // Otherwise, fetch the image and create a blob URL
+            else {
+                try {
+                    const response = await fetch(result.data, {
+                        headers: {
+                            'Authorization': `Bearer ${HF_TOKEN}`
+                        }
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`Failed to fetch image: ${response.status}`);
+                    }
+                    
+                    const blob = await response.blob();
+                    return URL.createObjectURL(blob);
+                } catch (error) {
+                    console.error("Failed to load image from URL:", result.data);
+                    
+                    // Fallback to original image
+                    const reader = new FileReader();
+                    return new Promise((resolve) => {
+                        reader.onload = () => resolve(reader.result);
+                        reader.readAsDataURL(imageFile);
+                    });
+                }
+            }
+        } 
+        else {
+            throw new Error("Unexpected result format");
+        }
+    } catch (error) {
+        console.error("Error processing background removal result:", error);
+        throw new Error("Failed to process the image after background removal");
+    }
+}
+
+// We've removed the urlToDownloadableBlob function as it's no longer needed.
+// The removeBackground function now directly returns a blob URL.
+
 document.addEventListener('DOMContentLoaded', () => {
     // Global variables 
-    let addToLibraryToggle; // Declare this globally so it can be used across functions
     let lastCreatedPsdData = null; // Store the last created PSD data for direct opening
     
     // Add CSS for processing message
@@ -54,6 +217,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // DOM elements
     const fileUpload = document.getElementById('imageUpload');
     const selectImageBtn = document.getElementById('selectImage');
+    const removeBackgroundBtn = document.getElementById('removeBackground');
     const imageCanvas = document.getElementById('imageCanvas');
     const borderCanvas = document.getElementById('borderCanvas');
     const uploadPlaceholder = document.querySelector('.upload-placeholder');
@@ -62,14 +226,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let controlPointsCanvas;
     const downloadBtn = document.getElementById('downloadBtn');
     const exportPsdBtn = document.getElementById('exportPsdBtn');
-    // Don't redeclare addToLibraryToggle with const here since we're using it as a global variable
-    addToLibraryToggle = document.getElementById('addToLibraryToggle');
     const resetFolderBtn = document.getElementById('resetFolderBtn');
-    const exportToggleContainer = document.querySelector('.export-toggle-container');
-    const controls = document.getElementById('controls');
-    const imageFilters = document.getElementById('image-filters');
-    const shadowSettings = document.getElementById('shadow-settings');
-    const edgeSelectionPanel = document.getElementById('edge-selection-panel');
+    const toolsContainer = document.getElementById('tools-container');
     
     // Get references to slider elements
     const simplificationRange = document.getElementById('simplificationRange');
@@ -85,7 +243,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const isLowPoly = false; // No low-poly style by default
     const shouldFill = true; // Always fill the border
     
-    const borderColor = document.getElementById('borderColor');
+    // Default border color (white)
+    const defaultBorderColor = '#FFFFFF';
     
     // Hidden but needed for compatibility
     let fillColor = { value: '#FFFFFF' };
@@ -93,13 +252,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Sliders
     const blackAndWhiteFilterCheckbox = document.getElementById('blackAndWhiteFilter');
     
-    const blackPointRange = document.getElementById('blackPointRange');
-    const blackPointValue = document.getElementById('blackPointValue');
-    
-    const whitePointRange = document.getElementById('whitePointRange');
-    const whitePointValue = document.getElementById('whitePointValue');
-    
-    const bwFilterControls = document.getElementById('bwFilterControls');
+    // Default values for black and white points (removed controls)
+    const defaultBlackPoint = 0;
+    const defaultWhitePoint = 255;
     
     // Shadow size is now a slider
     const shadowSizeRange = document.getElementById('shadowSizeRange');
@@ -130,14 +285,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Flag for edge selection mode
     let edgeSelectionMode = false;
     
-    // Hide panels initially
-    controls.style.display = 'none';
-    imageFilters.style.display = 'none';
-    shadowSettings.style.display = 'none';
-    edgeSelectionPanel.style.display = 'none';
+    // Hide tools container initially
+    toolsContainer.style.display = 'none';
     downloadBtn.style.display = 'none';
     exportPsdBtn.style.display = 'none';
-    exportToggleContainer.style.display = 'none';
     // Add null check for resetFolderBtn before trying to access its style property
     if (resetFolderBtn) {
         resetFolderBtn.style.display = 'none';
@@ -149,13 +300,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Event listeners
     fileUpload.addEventListener('change', handleImageUpload);
     selectImageBtn.addEventListener('click', () => fileUpload.click());
+    removeBackgroundBtn.addEventListener('click', handleRemoveBackground);
     downloadBtn.addEventListener('click', downloadResult);
     exportPsdBtn.addEventListener('click', exportAsPsd);
     // Add null check before adding the event listener
     if (resetFolderBtn) {
         resetFolderBtn.addEventListener('click', resetExportFolder);
     }
-    addToLibraryToggle.addEventListener('change', handleToggleChange);
     
     // Set up drag and drop for the canvas area
     canvasArea.addEventListener('dragover', handleDragOver);
@@ -230,14 +381,13 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Check if file is an image or PSD
             if (fileType.match('image.*') || isPsd) {
-                // Process the file as if it was selected via the file input
-                const dataTransfer = new DataTransfer();
-                dataTransfer.items.add(file);
-                fileUpload.files = dataTransfer.files;
+                // Process the file directly with our handler
+                handleImageFile(file);
                 
-                // Trigger the change event
-                const event = new Event('change', { bubbles: true });
-                fileUpload.dispatchEvent(event);
+                // Re-enable the Remove Background button for a new image
+                if (removeBackgroundBtn) {
+                    removeBackgroundBtn.disabled = false;
+                }
             }
         }
     }
@@ -248,56 +398,9 @@ document.addEventListener('DOMContentLoaded', () => {
         generateBorder();
     });
     
-    borderColor.addEventListener('input', function() {
-        // Set fill color to match border color
-        fillColor.value = this.value;
-        generateBorder();
-    });
-    
     // Black and white filter controls
     if (blackAndWhiteFilterCheckbox) {
         blackAndWhiteFilterCheckbox.addEventListener('change', () => {
-            toggleBWFilterControls();
-            applyImageFilters();
-        });
-    }
-    
-    // Black point slider control
-    if (blackPointRange) {
-        blackPointRange.addEventListener('input', (e) => {
-            // Value display will be updated in the input event handler
-            
-            // Ensure white point is always greater than black point
-            const blackPointVal = getSliderValue(blackPointRange);
-            const whitePointVal = getSliderValue(whitePointRange);
-            
-            if (blackPointVal >= whitePointVal) {
-                const newWhitePointValue = blackPointVal + 1;
-                whitePointRange.value = Math.min(newWhitePointValue, parseInt(whitePointRange.getAttribute('max')));
-                whitePointValue.textContent = newWhitePointValue;
-                whitePointValue.setAttribute('data-actual-value', newWhitePointValue);
-            }
-            
-            applyImageFilters();
-        });
-    }
-    
-    // White point slider control
-    if (whitePointRange) {
-        whitePointRange.addEventListener('input', (e) => {
-            // Value display will be updated in the input event handler
-            
-            // Ensure black point is always less than white point
-            const whitePointVal = getSliderValue(whitePointRange);
-            const blackPointVal = getSliderValue(blackPointRange);
-            
-            if (whitePointVal <= blackPointVal) {
-                const newBlackPointValue = whitePointVal - 1;
-                blackPointRange.value = Math.max(newBlackPointValue, parseInt(blackPointRange.getAttribute('min')));
-                blackPointValue.textContent = newBlackPointValue;
-                blackPointValue.setAttribute('data-actual-value', newBlackPointValue);
-            }
-            
             applyImageFilters();
         });
     }
@@ -317,8 +420,6 @@ document.addEventListener('DOMContentLoaded', () => {
             applyImageFilters();
         });
     }
-    
-    // Initialize B&W filter controls visibility
     toggleBWFilterControls();
     
     // Function to create the control points canvas
@@ -358,8 +459,11 @@ document.addEventListener('DOMContentLoaded', () => {
         return null;
     }
     
-    function handleImageUpload(e) {
-        const file = e.target.files[0];
+    /**
+     * Process an image file and display it on the canvas
+     * @param {File} file - The image file to process
+     */
+    function handleImageFile(file) {
         if (!file) return;
         
         // Check if it's a PSD file
@@ -410,6 +514,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 originalImage = img;
                 originalImage.padding = padding;
                 
+                // Display image dimensions
+                displayImageDimensions();
+                
                 // Apply filters if enabled (including shadow after border detection)
                 applyImageFilters();
                 
@@ -418,14 +525,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     uploadPlaceholder.style.display = 'none';
                 }
                 
-                // Show all control panels
-                controls.style.display = 'block';
-                imageFilters.style.display = 'block';
-                shadowSettings.style.display = 'block';
-                edgeSelectionPanel.style.display = 'block';
+                // Show all control panels and buttons
+                toolsContainer.style.display = 'block';
                 downloadBtn.style.display = 'block';
                 exportPsdBtn.style.display = 'block';
-                exportToggleContainer.style.display = 'flex';
+                removeBackgroundBtn.style.display = 'block';
+                
+                // Re-enable the Remove Background button when a new image is loaded
+                if (removeBackgroundBtn) {
+                    removeBackgroundBtn.disabled = false;
+                }
                 
                 // Update folder information in UI if available
                 updateFolderInfo();
@@ -434,6 +543,13 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         
         reader.readAsDataURL(file);
+    }
+
+    function handleImageUpload(e) {
+        const file = e.target.files[0];
+        if (file) {
+            handleImageFile(file);
+        }
     }
     
     // Function to update folder information in the UI
@@ -459,10 +575,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    function detectEdges() {
-        // Get image data
+    function detectEdges(sourceCanvas = null) {
+        // Get image data - either from the source canvas or the default image canvas
         const padding = originalImage.padding || 0;
-        const imageData = imageCtx.getImageData(
+        
+        // Determine which canvas to use as the source
+        const sourceCtx = sourceCanvas ? sourceCanvas.getContext('2d') : imageCtx;
+        
+        const imageData = sourceCtx.getImageData(
             padding, 
             padding, 
             imageCanvas.width - (padding * 2), 
@@ -762,7 +882,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Get parameters
         const simplification = simplificationRange ? getSliderValue(simplificationRange) : 18;
         const thickness = currentThickness;
-        const selectedColor = borderColor.value;
+        const selectedColor = defaultBorderColor;
         // Always use border color for fill and 100% opacity
         const fillColorValue = selectedColor;
         const opacity = 1.0; // Always 100% opacity
@@ -1584,9 +1704,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const timestamp = new Date().getTime();
         const fileName = `polygon-border-${timestamp}.png`;
         
-        // Convert canvas to blob for downloading and saving to folder
+        // Convert canvas to blob for downloading
         tempCanvas.toBlob(async (blob) => {
-            // Always download to Downloads folder
+            // Download to Downloads folder
             const link = document.createElement('a');
             link.download = fileName;
             link.href = URL.createObjectURL(blob);
@@ -1594,62 +1714,6 @@ document.addEventListener('DOMContentLoaded', () => {
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(link.href);
-            
-            // Check if we should also save to library folder
-            if (addToLibraryToggle && addToLibraryToggle.checked) {
-                // Check if Eagle API is enabled or we should use folder
-                const useEagleAPI = addToLibraryToggle && addToLibraryToggle.checked;
-                
-                if (useEagleAPI) {
-                    // Try to add to Eagle Library
-                    console.log('Adding PNG to Eagle library...');
-                    
-                    // Convert the canvas to data URL for Eagle API
-                    const imageDataURL = tempCanvas.toDataURL('image/png');
-                    
-                    // Create tags for the image (empty array - no tags for PNG files)
-                    const tags = [];
-                    
-                    // Add to Eagle library using API
-                    tryDirectEagleAPI(imageDataURL, fileName, tags, 'png').catch(error => {
-                        console.error('Direct Eagle API failed:', error);
-                        
-                        // Fall back to proxy method if direct method fails
-                        console.log('Falling back to proxy method...');
-                        const proxySuccess = sendToEagleViaProxy(imageDataURL, fileName, tags);
-                        
-                        if (!proxySuccess) {
-                            // If proxy method also fails, log error
-                            console.error('Unable to connect to Eagle App. Please verify it is running and API access is enabled.');
-                        }
-                    });
-                } else {
-                    // Use folder selection (existing code)
-                    const savedFolderHandle = getSavedDirectoryHandle();
-                    
-                    if (savedFolderHandle) {
-                        const success = await exportPngToFolder(savedFolderHandle, blob, fileName);
-                        if (success) {
-                            alert(`PNG file '${fileName}' has been saved to both your Downloads folder and your library folder: ${savedFolderHandle.name}`);
-                        }
-                    } else {
-                        // Try auto-selecting the folder
-                        try {
-                            const folderHandle = await selectExportFolderAuto();
-                            if (folderHandle) {
-                                saveDirectoryHandle(folderHandle);
-                                const success = await exportPngToFolder(folderHandle, blob, fileName);
-                                if (success) {
-                                    alert(`PNG file '${fileName}' has been saved to both your Downloads folder and your library folder: ${folderHandle.name}`);
-                                }
-                            }
-                        } catch (error) {
-                            console.error('Error saving to library folder:', error);
-                            alert('PNG file has been downloaded, but could not be saved to library folder. Please check console for details.');
-                        }
-                    }
-                }
-            }
         }, 'image/png');
     }
     
@@ -1679,11 +1743,21 @@ document.addEventListener('DOMContentLoaded', () => {
         borderLayer.height = borderCanvas.height;
         const borderLayerCtx = borderLayer.getContext('2d');
         
+        // Create original image layer (without filters and effects)
+        const originalImageLayer = document.createElement('canvas');
+        originalImageLayer.width = imageCanvas.width;
+        originalImageLayer.height = imageCanvas.height;
+        const originalImageLayerCtx = originalImageLayer.getContext('2d');
+        
         // Draw image with all styling on the image layer
         imageLayerCtx.drawImage(imageCanvas, 0, 0);
         
         // Draw just the border on the border layer
         borderLayerCtx.drawImage(borderCanvas, 0, 0);
+        
+        // Draw the original image without any filters or effects on the original image layer
+        const padding = originalImage.padding || 0;
+        originalImageLayerCtx.drawImage(originalImage, padding, padding, originalImage.width, originalImage.height);
         
         // Create main composite canvas with all layers combined
         const compositeCanvas = document.createElement('canvas');
@@ -1693,7 +1767,7 @@ document.addEventListener('DOMContentLoaded', () => {
         compositeCtx.drawImage(borderCanvas, 0, 0);
         compositeCtx.drawImage(imageCanvas, 0, 0);
         
-        // Create PSD document
+        // Create PSD document with layers in proper order (original at top, but hidden)
         const psd = {
             width: imageCanvas.width,
             height: imageCanvas.height,
@@ -1705,6 +1779,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 {
                     name: 'Image with styling',
                     canvas: imageLayer
+                },
+                {
+                    name: 'Original image',
+                    canvas: originalImageLayer,
+                    hidden: true  // This layer will be hidden by default
                 }
             ],
             // Add the composite image as the main canvas
@@ -1747,43 +1826,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 annotation: "Generated with Auto Borders Tool"
             };
             
-            // ALWAYS download the PSD locally first - this ensures the user has a copy
+            // Download the PSD file
             downloadAsPSD(blob, fileName);
-            
-            // Check if we should also add to Eagle
-            if (addToLibraryToggle && addToLibraryToggle.checked) {
-                console.log('Adding PSD to Eagle library...');
-                
-                // Get a preview image for Eagle
-                const previewDataURL = compositeCanvas.toDataURL('image/png');
-                
-                // Add metadata
-                const tags = ['polygon-border', 'auto-border', 'generated', 'psd'];
-                const metadata = {
-                    tags: tags,
-                    annotation: "Generated with Auto Borders Tool",
-                    website: window.location.href
-                };
-                
-                // Check if Eagle app is running first
-                isEagleAppRunning()
-                    .then(isRunning => {
-                        if (isRunning) {
-                            // Check if we need to use the folder selection instead of direct Eagle API for PSD
-                            if (exportPsdBtn.id === 'exportPsdBtn') {
-                                // For PSD files, use folder selection instead of direct Eagle app API
-                                handlePsdFolderSelection(blob, fileName, psdBuffer, previewDataURL, metadata);
-                            } else {
-                                // For other file types (PNG), use direct Eagle app link method as normal
-                                sendPsdToEagle(psdBuffer, previewDataURL, fileName, metadata);
-                            }
-                        }
-                    });
-            } else {
-                // This branch is for when Eagle toggle is unchecked - user wants regular Downloads only
-                // No need to do anything extra, as we've already downloaded the PSD to Downloads folder
-                console.log('Eagle integration disabled - PSD already downloaded to Downloads folder');
-            }
         } catch (error) {
             console.error('Error creating PSD:', error);
             alert('Failed to create PSD file: ' + error.message);
@@ -1812,12 +1856,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // Function to toggle B&W filter controls visibility
-    function toggleBWFilterControls() {
-        if (bwFilterControls) {
-            bwFilterControls.style.display = blackAndWhiteFilterCheckbox.checked ? 'block' : 'none';
-        }
-    }
     
     // Function to initialize slider controls
     function initSliders() {
@@ -2159,8 +2197,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = imageData.data;
             
             // Get black point and white point values from sliders using getSliderValue
-            const blackPoint = blackPointRange ? getSliderValue(blackPointRange) : 0;
-            const whitePoint = whitePointRange ? getSliderValue(whitePointRange) : 255;
+            const blackPoint = defaultBlackPoint;
+            const whitePoint = defaultWhitePoint;
             
             // Calculate the scale factor for remapping
             const scale = 255 / (whitePoint - blackPoint);
@@ -2188,23 +2226,25 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // At this point, we have the image with only the B&W filter applied (if enabled)
-        // Use this for edge detection BEFORE adding shadow
-        
-        // Re-detect edges based on the current image without shadow
-        detectEdges();
-        
-        // Regenerate border
-        generateBorder();
-        
-        // Now apply shadow effect AFTER edge detection
-        // Create a temporary canvas to apply the drop shadow
+        // Store a copy of the current image state for edge detection
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = imageCanvas.width;
         tempCanvas.height = imageCanvas.height;
         const tempCtx = tempCanvas.getContext('2d');
+        tempCtx.drawImage(imageCanvas, 0, 0);
+        
+        // Use this for edge detection BEFORE adding shadow
+        detectEdges(tempCanvas);
+        
+        // Now apply shadow effect AFTER edge detection
+        // Create a temporary canvas to apply the drop shadow
+        const shadowCanvas = document.createElement('canvas');
+        shadowCanvas.width = imageCanvas.width;
+        shadowCanvas.height = imageCanvas.height;
+        const shadowCtx = shadowCanvas.getContext('2d');
         
         // Copy the current image (with B&W filter applied if enabled, but before shadow)
-        tempCtx.drawImage(imageCanvas, 0, 0);
+        shadowCtx.drawImage(imageCanvas, 0, 0);
         
         // Clear the original canvas
         imageCtx.clearRect(0, 0, imageCanvas.width, imageCanvas.height);
@@ -2216,39 +2256,25 @@ document.addEventListener('DOMContentLoaded', () => {
         imageCtx.shadowOffsetY = 0; // 0 distance in Y
         
         // Draw the processed image with shadow
-        imageCtx.drawImage(tempCanvas, 0, 0);
+        imageCtx.drawImage(shadowCanvas, 0, 0);
         
         // Reset shadow for other canvas operations
         imageCtx.shadowColor = 'transparent';
         imageCtx.shadowBlur = 0;
         imageCtx.shadowOffsetX = 0;
         imageCtx.shadowOffsetY = 0;
+        
+        // Draw image dimensions in the top-left corner
+        displayImageDimensions();
+        
+        // Regenerate border with the new edge data
+        generateBorder();
     }
 
     // Function to add the current PSD to Eagle library
     function addToEagleLibrary() {
         if (!originalImage) {
             console.error('No image to add to library');
-            return;
-        }
-        
-        // Use the global variable instead of redeclaring it
-        const useEagleAPI = addToLibraryToggle && addToLibraryToggle.checked;
-        
-        if (useEagleAPI) {
-            console.log('Using Eagle API...');
-            addImageToEagleAPI();
-        } else {
-            console.log('Using folder export...');
-            // Prompt for folder selection if we don't have one yet
-            exportPsdToFolder();
-        }
-    }
-    
-    // Function to add the current image to Eagle using its API
-    function addImageToEagleAPI() {
-        if (!originalImage) {
-            console.error('No image loaded for Eagle API');
             return;
         }
         
@@ -3588,81 +3614,163 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Handle clipboard paste (Cmd+V / Ctrl+V)
     function handleClipboardPaste(e) {
-        // Check if clipboard contains image data
-        const items = e.clipboardData.items;
-        
+        // Prevent the default paste behavior
+        e.preventDefault();
+    
+        // Get the clipboard data
+        const clipboardData = e.clipboardData || window.clipboardData;
+        const items = clipboardData?.items;
+    
+        if (!items) return;
+    
+        // Check if any of the clipboard items is an image
         for (let i = 0; i < items.length; i++) {
-            // Check if the clipboard item is an image
             if (items[i].type.indexOf('image') !== -1) {
-                // Get the image as a Blob
                 const blob = items[i].getAsFile();
                 
-                // Create a FileReader to read the blob
-                const reader = new FileReader();
+                // Handle the image as if it was uploaded
+                if (blob) {
+                    const file = new File([blob], "pasted-image.png", { type: blob.type });
+                    handleImageFile(file);
+                    
+                    // Re-enable the Remove Background button for a new image
+                    if (removeBackgroundBtn) {
+                        removeBackgroundBtn.disabled = false;
+                    }
+                }
                 
-                reader.onload = function(event) {
-                    const img = new Image();
-                    img.onload = function() {
-                        // Add padding to prevent clipping
-                        const padding = 20; // 20px padding on all sides
-                        
-                        // Set canvas dimensions with padding
-                        imageCanvas.width = img.width + (padding * 2);
-                        imageCanvas.height = img.height + (padding * 2);
-                        borderCanvas.width = img.width + (padding * 2);
-                        borderCanvas.height = img.height + (padding * 2);
-                        
-                        // Create or resize control points canvas
-                        if (controlPointsCanvas) {
-                            controlPointsCanvas.width = imageCanvas.width;
-                            controlPointsCanvas.height = imageCanvas.height;
-                        } else if (edgeSelectionMode) {
-                            createControlPointsCanvas();
-                        }
-                        
-                        // Clear all canvases
-                        imageCtx.clearRect(0, 0, imageCanvas.width, imageCanvas.height);
-                        borderCtx.clearRect(0, 0, borderCanvas.width, borderCanvas.height);
-                        if (controlPointsCtx) {
-                            controlPointsCtx.clearRect(0, 0, controlPointsCanvas.width, controlPointsCanvas.height);
-                        }
-                        
-                        // Draw image on canvas with padding
-                        imageCtx.drawImage(img, padding, padding, img.width, img.height);
-                        
-                        // Store the original image and padding info
-                        originalImage = img;
-                        originalImage.padding = padding;
-                        
-                        // Apply filters if enabled (including shadow after border detection)
-                        applyImageFilters();
-                        
-                        // Hide the placeholder
-                        if (uploadPlaceholder) {
-                            uploadPlaceholder.style.display = 'none';
-                        }
-                        
-                        // Show all control panels
-                        controls.style.display = 'block';
-                        imageFilters.style.display = 'block';
-                        shadowSettings.style.display = 'block';
-                        edgeSelectionPanel.style.display = 'block';
-                        downloadBtn.style.display = 'block';
-                        exportPsdBtn.style.display = 'block';
-                        exportToggleContainer.style.display = 'flex';
-                        
-                        // Update folder information in UI if available
-                        updateFolderInfo();
-                    };
-                    img.src = event.target.result;
-                };
-                
-                reader.readAsDataURL(blob);
-                
-                // Prevent the default paste behavior
-                e.preventDefault();
-                return;
+                break;
             }
         }
+    }
+    
+    /**
+     * Handles the remove background button click
+     * Sends the current image to the background removal API and updates the canvas
+     */
+    async function handleRemoveBackground() {
+        // Show processing message
+        showProcessingMessage("Removing background...");
+        
+        try {
+            // Create a temporary canvas with just the original image (no filters/effects)
+            const tempCanvas = document.createElement('canvas');
+            const padding = originalImage.padding || 0;
+            
+            // Set canvas dimensions to match the original image
+            tempCanvas.width = originalImage.width;
+            tempCanvas.height = originalImage.height;
+            const tempCtx = tempCanvas.getContext('2d');
+            
+            // Draw only the original image without any filters or effects
+            tempCtx.drawImage(originalImage, 0, 0, originalImage.width, originalImage.height);
+            
+            // Convert the original image canvas to blob
+            const imageBlob = await new Promise(resolve => {
+                tempCanvas.toBlob(resolve, 'image/png');
+            });
+            
+            if (!imageBlob) {
+                throw new Error("Failed to convert image to blob");
+            }
+            
+            // Use the removeBackground function to get the processed image URL (already a blob URL)
+            const blobUrl = await removeBackground(imageBlob);
+            
+            // Load the new image
+            const img = new Image();
+            img.onload = function() {
+                // Get the dimensions of the original canvas
+                const originalWidth = imageCanvas.width;
+                const originalHeight = imageCanvas.height;
+                const padding = originalImage ? (originalImage.padding || 20) : 20;
+                
+                // Replace the original image with the new one
+                originalImage = img;
+                originalImage.padding = padding;
+                
+                // Set canvas dimensions with padding
+                imageCanvas.width = img.width + (padding * 2);
+                imageCanvas.height = img.height + (padding * 2);
+                borderCanvas.width = img.width + (padding * 2);
+                borderCanvas.height = img.height + (padding * 2);
+                
+                // Clear and redraw with padding
+                imageCtx.clearRect(0, 0, imageCanvas.width, imageCanvas.height);
+                imageCtx.drawImage(img, padding, padding, img.width, img.height);
+                
+                            // Apply filters and detect edges
+            applyImageFilters();
+            
+            // Ensure dimensions are displayed after background removal
+            displayImageDimensions();
+            
+            // Disable the Remove Background button after successful processing
+            if (removeBackgroundBtn) {
+                removeBackgroundBtn.disabled = true;
+            }
+            
+            // Hide processing message
+            hideProcessingMessage();
+            };
+            img.onerror = function() {
+                hideProcessingMessage();
+                alert("Failed to load the processed image");
+            };
+            img.src = blobUrl;
+        } catch (error) {
+            console.error("Background removal error:", error);
+            hideProcessingMessage();
+            alert("Failed to remove background: " + error.message);
+        }
+    }
+    
+    /**
+     * Show a processing message while background removal is in progress
+     */
+    function showProcessingMessage(message) {
+        const existingMessage = document.querySelector('.processing-message');
+        if (existingMessage) {
+            existingMessage.remove();
+        }
+        
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'processing-message';
+        messageDiv.innerHTML = `
+            <div class="processing-content">
+                <div class="spinner"></div>
+                <div>${message}</div>
+            </div>
+        `;
+        document.body.appendChild(messageDiv);
+    }
+    
+    /**
+     * Hide the processing message
+     */
+    function hideProcessingMessage() {
+        const messageDiv = document.querySelector('.processing-message');
+        if (messageDiv) {
+            messageDiv.remove();
+        }
+    }
+
+    // Function to display image dimensions in the top bar
+    function displayImageDimensions() {
+        const imageDimensionsEl = document.getElementById('image-dimensions');
+        
+        if (!originalImage || !imageDimensionsEl) {
+            if (imageDimensionsEl) {
+                imageDimensionsEl.style.display = 'none';
+            }
+            return;
+        }
+        
+        const width = originalImage.width;
+        const height = originalImage.height;
+        const text = `${width} × ${height}px`;
+        
+        imageDimensionsEl.textContent = text;
+        imageDimensionsEl.style.display = 'flex';
     }
 }); 
