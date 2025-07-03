@@ -1,18 +1,3 @@
-// Import the Gradio client from CDN using dynamic import for compatibility
-let Client;
-(async function() {
-    try {
-        const module = await import("https://cdn.jsdelivr.net/npm/@gradio/client/dist/index.min.js");
-        Client = module.Client;
-    } catch (error) {
-        console.error("Error importing Gradio client:", error);
-    }
-})();
-
-// Constants
-const SPACE_NAME = "grmeknik/internal-background-removal";
-let HF_TOKEN; // Will be loaded from config
-
 // Load configuration
 fetch('config.js')
     .then(response => response.text())
@@ -20,147 +5,12 @@ fetch('config.js')
         // Remove any "export" statements and evaluate the config
         const configText = text.replace(/export\s+const/g, 'const');
         eval(configText);
-        HF_TOKEN = config.HF_TOKEN;
     })
     .catch(error => {
         console.error("Error loading configuration:", error);
-        alert("Please make sure to create a config.js file with your Hugging Face token.");
     });
 
-/**
- * Removes the background from an image using the Hugging Face API
- * @param {File|Blob} imageFile - The image file to process
- * @returns {Promise<string>} - A promise that resolves to the URL of the processed image
- */
-async function removeBackground(imageFile) {
-    if (!imageFile) {
-        throw new Error("No image provided");
-    }
 
-    // Connect to Hugging Face Space
-    const client = await Client.connect(SPACE_NAME, {
-        hf_token: HF_TOKEN
-    });
-    
-    // Call the API with the uploaded image
-    const result = await client.predict("/png", { 
-        f: imageFile
-    });
-    
-    console.log("API Response:", result.data);
-    
-    // Process the result
-    if (!result.data) {
-        throw new Error("No data received from API");
-    }
-    
-    try {
-        // Handle array response format (most common from this API)
-        if (Array.isArray(result.data) && result.data.length > 0) {
-            const fileData = result.data[0];
-            
-            // If the API returns binary data directly
-            if (fileData instanceof Blob) {
-                return URL.createObjectURL(fileData);
-            }
-            
-            // If API returns a URL, we need to fetch that data
-            if (fileData.url) {
-                // For Hugging Face Spaces, we need to fetch the data through the client
-                try {
-                    // Use fetch directly if the URL is accessible
-                    const response = await fetch(fileData.url, {
-                        headers: {
-                            'Authorization': `Bearer ${HF_TOKEN}`
-                        }
-                    });
-                    
-                    if (!response.ok) {
-                        // If direct fetch fails, try to get the file through the client
-                        const blob = await client.view_file(fileData.path);
-                        return URL.createObjectURL(blob);
-                    }
-                    
-                    const blob = await response.blob();
-                    return URL.createObjectURL(blob);
-                } catch (fetchError) {
-                    console.error("Error fetching the processed image:", fetchError);
-                    
-                    // Try an alternative approach using the client's view_file method
-                    try {
-                        if (fileData.path) {
-                            const blob = await client.view_file(fileData.path);
-                            return URL.createObjectURL(blob);
-                        }
-                    } catch (viewError) {
-                        console.error("Error viewing file through client:", viewError);
-                    }
-                    
-                    // Fallback to original image if all attempts fail
-                    console.warn("Could not access processed image, using original");
-                    const reader = new FileReader();
-                    return new Promise((resolve) => {
-                        reader.onload = () => resolve(reader.result);
-                        reader.readAsDataURL(imageFile);
-                    });
-                }
-            }
-            
-            // If we have neither blob nor URL, fallback to original
-            const reader = new FileReader();
-            return new Promise((resolve) => {
-                reader.onload = () => resolve(reader.result);
-                reader.readAsDataURL(imageFile);
-            });
-        }
-        // Handle blob format
-        else if (result.data instanceof Blob) {
-            return URL.createObjectURL(result.data);
-        } 
-        // Handle string URL or data URL
-        else if (typeof result.data === 'string') {
-            // If it's a data URL, we can use it directly
-            if (result.data.startsWith('data:')) {
-                return result.data;
-            } 
-            // Otherwise, fetch the image and create a blob URL
-            else {
-                try {
-                    const response = await fetch(result.data, {
-                        headers: {
-                            'Authorization': `Bearer ${HF_TOKEN}`
-                        }
-                    });
-                    
-                    if (!response.ok) {
-                        throw new Error(`Failed to fetch image: ${response.status}`);
-                    }
-                    
-                    const blob = await response.blob();
-                    return URL.createObjectURL(blob);
-                } catch (error) {
-                    console.error("Failed to load image from URL:", result.data);
-                    
-                    // Fallback to original image
-                    const reader = new FileReader();
-                    return new Promise((resolve) => {
-                        reader.onload = () => resolve(reader.result);
-                        reader.readAsDataURL(imageFile);
-                    });
-                }
-            }
-        } 
-        else {
-            throw new Error("Unexpected result format");
-        }
-    } catch (error) {
-        console.error("Error processing background removal result:", error);
-        throw new Error("Failed to process the image after background removal");
-    }
-}
-
-// We've removed the urlToDownloadableBlob function as it's no longer needed.
-// The removeBackground function now directly returns a blob URL.
 
 document.addEventListener('DOMContentLoaded', () => {
     // Global variables 
@@ -182,7 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 2000);
     }
     
-    // Add CSS for processing message
+    // Add CSS for processing messages
     const style = document.createElement('style');
     style.textContent = `
         .processing-message {
@@ -233,7 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // DOM elements
     const fileUpload = document.getElementById('imageUpload');
     const selectImageBtn = document.getElementById('selectImage');
-    const removeBackgroundBtn = document.getElementById('removeBackground');
+
     const imageCanvas = document.getElementById('imageCanvas');
     const borderCanvas = document.getElementById('borderCanvas');
     const uploadPlaceholder = document.querySelector('.upload-placeholder');
@@ -310,7 +160,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Event listeners
     fileUpload.addEventListener('change', handleImageUpload);
     selectImageBtn.addEventListener('click', () => fileUpload.click());
-    removeBackgroundBtn.addEventListener('click', handleRemoveBackground);
+
     renderBtn.addEventListener('click', handleRender);
     downloadBtn.addEventListener('click', downloadResult);
     exportPsdBtn.addEventListener('click', exportAsPsd);
@@ -403,10 +253,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Process the file directly with our handler
                 handleImageFile(file);
                 
-                // Re-enable the Remove Background button for a new image
-                if (removeBackgroundBtn) {
-                    removeBackgroundBtn.disabled = false;
-                }
+
             }
         }
     }
@@ -525,7 +372,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 // Show all control panels
                 toolsContainer.style.display = 'block';
-                removeBackgroundBtn.style.display = 'block';
                 
                 // Show render button, hide export buttons
                 renderBtn.style.display = 'inline-flex';
@@ -544,10 +390,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 dragPsdBtnText.textContent = 'Uploading...';
                 dragPsdBtn.draggable = false;
                 
-                // Re-enable the Remove Background button when a new image is loaded
-                if (removeBackgroundBtn) {
-                    removeBackgroundBtn.disabled = false;
-                }
+
                 
                 // Update folder information in UI if available
                 updateFolderInfo();
@@ -3618,10 +3461,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const file = new File([blob], "pasted-image.png", { type: blob.type });
                     handleImageFile(file);
                     
-                    // Re-enable the Remove Background button for a new image
-                    if (removeBackgroundBtn) {
-                        removeBackgroundBtn.disabled = false;
-                    }
+
                 }
                 
                 break;
@@ -3629,119 +3469,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    /**
-     * Handles the remove background button click
-     * Sends the current image to the background removal API and updates the canvas
-     */
-    async function handleRemoveBackground() {
-        // Show processing message
-        showProcessingMessage("Removing background...");
-        
-        try {
-            // Create a temporary canvas with just the original image (no filters/effects)
-            const tempCanvas = document.createElement('canvas');
-            const padding = originalImage.padding || 0;
-            
-            // Set canvas dimensions to match the original image
-            tempCanvas.width = originalImage.width;
-            tempCanvas.height = originalImage.height;
-            const tempCtx = tempCanvas.getContext('2d');
-            
-            // Draw only the original image without any filters or effects
-            tempCtx.drawImage(originalImage, 0, 0, originalImage.width, originalImage.height);
-            
-            // Convert the original image canvas to blob
-            const imageBlob = await new Promise(resolve => {
-                tempCanvas.toBlob(resolve, 'image/png');
-            });
-            
-            if (!imageBlob) {
-                throw new Error("Failed to convert image to blob");
-            }
-            
-            // Use the removeBackground function to get the processed image URL (already a blob URL)
-            const blobUrl = await removeBackground(imageBlob);
-            
-            // Load the new image
-            const img = new Image();
-            img.onload = function() {
-                // Get the dimensions of the original canvas
-                const originalWidth = imageCanvas.width;
-                const originalHeight = imageCanvas.height;
-                const padding = originalImage ? (originalImage.padding || 20) : 20;
-                
-                // Replace the original image with the new one
-                originalImage = img;
-                originalImage.padding = padding;
-                
-                // Set canvas dimensions with padding
-                imageCanvas.width = img.width + (padding * 2);
-                imageCanvas.height = img.height + (padding * 2);
-                borderCanvas.width = img.width + (padding * 2);
-                borderCanvas.height = img.height + (padding * 2);
-                
-                // Clear and redraw with padding
-                imageCtx.clearRect(0, 0, imageCanvas.width, imageCanvas.height);
-                imageCtx.drawImage(img, padding, padding, img.width, img.height);
-                
-                            // Apply filters and detect edges
-            applyImageFilters();
-            
-            // Ensure dimensions are displayed after background removal
-            displayImageDimensions();
-            
-            // Mark that we need to render
-            markNeedsRender();
-            
-            // Disable the Remove Background button after successful processing
-            if (removeBackgroundBtn) {
-                removeBackgroundBtn.disabled = true;
-            }
-            
-            // Hide processing message
-            hideProcessingMessage();
-            };
-            img.onerror = function() {
-                hideProcessingMessage();
-                alert("Failed to load the processed image");
-            };
-            img.src = blobUrl;
-        } catch (error) {
-            console.error("Background removal error:", error);
-            hideProcessingMessage();
-            alert("Failed to remove background: " + error.message);
-        }
-    }
+
     
-    /**
-     * Show a processing message while background removal is in progress
-     */
-    function showProcessingMessage(message) {
-        const existingMessage = document.querySelector('.processing-message');
-        if (existingMessage) {
-            existingMessage.remove();
-        }
-        
-        const messageDiv = document.createElement('div');
-        messageDiv.className = 'processing-message';
-        messageDiv.innerHTML = `
-            <div class="processing-content">
-                <div class="spinner"></div>
-                <div>${message}</div>
-            </div>
-        `;
-        document.body.appendChild(messageDiv);
-    }
-    
-    /**
-     * Hide the processing message
-     */
-    function hideProcessingMessage() {
-        const messageDiv = document.querySelector('.processing-message');
-        if (messageDiv) {
-            messageDiv.remove();
-        }
-    }
+
 
     // Function to display image dimensions in the top bar
     function displayImageDimensions() {

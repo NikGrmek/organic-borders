@@ -7,7 +7,7 @@ const eagleConfig = {
 // Make the configuration available globally
 window.eagleConfig = eagleConfig;
 
-// Rename this file to config.js and replace the token with your own
+// Rename this file to config.js
 const config = {
-    HF_TOKEN: "your-hugging-face-token-here" // Replace with your actual Hugging Face token
+    // Configuration object for the application
 }; 
