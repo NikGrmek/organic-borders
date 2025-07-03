@@ -1590,11 +1590,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // Create canvases for each layer
-        const imageLayer = document.createElement('canvas');
-        imageLayer.width = imageCanvas.width;
-        imageLayer.height = imageCanvas.height;
-        const imageLayerCtx = imageLayer.getContext('2d');
-        
         const borderLayer = document.createElement('canvas');
         borderLayer.width = borderCanvas.width;
         borderLayer.height = borderCanvas.height;
@@ -1606,9 +1601,6 @@ document.addEventListener('DOMContentLoaded', () => {
         originalImageLayer.height = imageCanvas.height;
         const originalImageLayerCtx = originalImageLayer.getContext('2d');
         
-        // Draw image with all styling on the image layer
-        imageLayerCtx.drawImage(imageCanvas, 0, 0);
-        
         // Draw just the border on the border layer
         borderLayerCtx.drawImage(borderCanvas, 0, 0);
         
@@ -1616,15 +1608,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const padding = originalImage.padding || 0;
         originalImageLayerCtx.drawImage(originalImage, padding, padding, originalImage.width, originalImage.height);
         
-        // Create main composite canvas with all layers combined
+        // Create main composite canvas with border and original image
         const compositeCanvas = document.createElement('canvas');
         compositeCanvas.width = imageCanvas.width;
         compositeCanvas.height = imageCanvas.height;
         const compositeCtx = compositeCanvas.getContext('2d');
         compositeCtx.drawImage(borderCanvas, 0, 0);
-        compositeCtx.drawImage(imageCanvas, 0, 0);
+        compositeCtx.drawImage(originalImageLayer, 0, 0);
         
-        // Create PSD document with layers in proper order (original at top, but hidden)
+        // Create PSD document with layers in proper order (original on top, visible)
         const psd = {
             width: imageCanvas.width,
             height: imageCanvas.height,
@@ -1634,13 +1626,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     canvas: borderLayer
                 },
                 {
-                    name: 'Image with styling',
-                    canvas: imageLayer
-                },
-                {
                     name: 'Original image',
-                    canvas: originalImageLayer,
-                    hidden: true  // This layer will be hidden by default
+                    canvas: originalImageLayer
                 }
             ],
             // Add the composite image as the main canvas
@@ -3745,11 +3732,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // Create canvases for each layer
-        const imageLayer = document.createElement('canvas');
-        imageLayer.width = imageCanvas.width;
-        imageLayer.height = imageCanvas.height;
-        const imageLayerCtx = imageLayer.getContext('2d');
-        
         const borderLayer = document.createElement('canvas');
         borderLayer.width = borderCanvas.width;
         borderLayer.height = borderCanvas.height;
@@ -3761,9 +3743,6 @@ document.addEventListener('DOMContentLoaded', () => {
         originalImageLayer.height = imageCanvas.height;
         const originalImageLayerCtx = originalImageLayer.getContext('2d');
         
-        // Draw image with all styling on the image layer
-        imageLayerCtx.drawImage(imageCanvas, 0, 0);
-        
         // Draw just the border on the border layer
         borderLayerCtx.drawImage(borderCanvas, 0, 0);
         
@@ -3771,15 +3750,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const padding = originalImage.padding || 0;
         originalImageLayerCtx.drawImage(originalImage, padding, padding, originalImage.width, originalImage.height);
         
-        // Create main composite canvas with all layers combined
+        // Create main composite canvas with border and original image
         const compositeCanvas = document.createElement('canvas');
         compositeCanvas.width = imageCanvas.width;
         compositeCanvas.height = imageCanvas.height;
         const compositeCtx = compositeCanvas.getContext('2d');
         compositeCtx.drawImage(borderCanvas, 0, 0);
-        compositeCtx.drawImage(imageCanvas, 0, 0);
+        compositeCtx.drawImage(originalImageLayer, 0, 0);
         
-        // Create PSD document with layers in proper order (original at top, but hidden)
+        // Create PSD document with layers in proper order (original on top, visible)
         const psd = {
             width: imageCanvas.width,
             height: imageCanvas.height,
@@ -3789,13 +3768,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     canvas: borderLayer
                 },
                 {
-                    name: 'Image with styling',
-                    canvas: imageLayer
-                },
-                {
                     name: 'Original image',
-                    canvas: originalImageLayer,
-                    hidden: true  // This layer will be hidden by default
+                    canvas: originalImageLayer
                 }
             ],
             // Add the composite image as the main canvas
