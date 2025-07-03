@@ -555,9 +555,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     uploadPlaceholder.style.display = 'none';
                 }
                 
-                // Show all control panels and render button
+                // Show all control panels but hide render button initially
                 toolsContainer.style.display = 'block';
-                renderBtn.style.display = 'block';
+                renderBtn.style.display = 'none'; // Hide render button until changes are made
                 removeBackgroundBtn.style.display = 'block';
                 
                 // Hide download buttons until render is complete
