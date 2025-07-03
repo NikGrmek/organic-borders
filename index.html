@@ -19,7 +19,7 @@
                 Download PSD
             </button>
             
-            <button id="dragPsdBtn" class="download-btn drag-psd-btn" style="display: none;" draggable="true" title="Drag this to another app">
+            <div id="dragPsdBtn" class="download-btn drag-psd-btn" style="display: none;" draggable="true" title="Drag this PSD file to another app" role="button" tabindex="0">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M13 5H11V11H5V13H11V19H13V13H19V11H13V5Z" fill="currentColor"/>
                     <path d="M3 3H9V5H5V9H3V3Z" fill="currentColor"/>
@@ -28,7 +28,7 @@
                     <path d="M15 21H21V15H19V19H15V21Z" fill="currentColor"/>
                 </svg>
                 Drag PSD
-            </button>
+            </div>
         </div>
     </div>
     <div class="container">
@@ -141,6 +141,12 @@
     
     <script src="https://unpkg.com/ag-psd@18.0.1/dist/bundle.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    
+    <!-- Firebase SDK (disabled - using local methods for faster drag-and-drop)
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
+    -->
+    
     <script>
         // Make sure agPsd is available to our application
         window.agPsdLibrary = agPsd;

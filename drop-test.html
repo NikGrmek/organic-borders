@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PSD Drop Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .drop-zone {
+            border: 3px dashed #ccc;
+            border-radius: 10px;
+            padding: 50px;
+            text-align: center;
+            background-color: white;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+        }
+        .drop-zone.dragover {
+            border-color: #007bff;
+            background-color: #f0f8ff;
+        }
+        .output {
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid #ddd;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .data-item {
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            border-left: 4px solid #007bff;
+        }
+        .data-type {
+            font-weight: bold;
+            color: #007bff;
+        }
+        .data-content {
+            margin-top: 5px;
+            font-family: monospace;
+            background-color: #e9ecef;
+            padding: 5px;
+            border-radius: 3px;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+    <h1>PSD Drop Test Page</h1>
+    <p>Drag the PSD file from your app to the drop zone below to see what data is received:</p>
+    
+    <div class="drop-zone" id="dropZone">
+        <p>Drop your PSD file here</p>
+    </div>
+    
+    <div class="output" id="output">
+        <p>Drop data will appear here...</p>
+    </div>
+
+    <script>
+        const dropZone = document.getElementById('dropZone');
+        const output = document.getElementById('output');
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            
+            console.log('Drop event received:', e);
+            console.log('DataTransfer object:', e.dataTransfer);
+            console.log('DataTransfer types:', e.dataTransfer.types);
+            console.log('DataTransfer files:', e.dataTransfer.files);
+            console.log('DataTransfer items:', e.dataTransfer.items);
+            
+            // Clear previous output
+            output.innerHTML = '<h3>Received Data:</h3>';
+            
+            // Check DataTransfer types
+            const types = Array.from(e.dataTransfer.types);
+            addDataItem('Available Data Types', types.join(', '));
+            addDataItem('Types Count', types.length);
+            
+            // Check files count
+            const filesCount = e.dataTransfer.files ? e.dataTransfer.files.length : 0;
+            addDataItem('Files Count', filesCount);
+            
+            // Check items count
+            const itemsCount = e.dataTransfer.items ? e.dataTransfer.items.length : 0;
+            addDataItem('Items Count', itemsCount);
+            
+            // Debug DataTransfer.items
+            if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+                addDataItem('Items Debug', 'Processing items...');
+                for (let i = 0; i < e.dataTransfer.items.length; i++) {
+                    const item = e.dataTransfer.items[i];
+                    addDataItem(`Item ${i}`, {
+                        kind: item.kind,
+                        type: item.type
+                    });
+                    
+                    // If it's a file, try to get it
+                    if (item.kind === 'file') {
+                        try {
+                            const file = item.getAsFile();
+                            if (file) {
+                                addDataItem(`File from Item ${i}`, {
+                                    name: file.name,
+                                    size: file.size + ' bytes',
+                                    type: file.type,
+                                    lastModified: new Date(file.lastModified).toLocaleString()
+                                });
+                                
+                                // Read first few bytes to verify it's a real PSD
+                                const reader = new FileReader();
+                                reader.onload = function(e) {
+                                    const arrayBuffer = e.target.result;
+                                    const view = new DataView(arrayBuffer);
+                                    
+                                    // Check PSD signature (first 4 bytes should be "8BPS")
+                                    const signature = String.fromCharCode(
+                                        view.getUint8(0),
+                                        view.getUint8(1),
+                                        view.getUint8(2),
+                                        view.getUint8(3)
+                                    );
+                                    
+                                    addDataItem('PSD Signature Check', signature === '8BPS' ? 'Valid PSD file ✓' : 'Invalid PSD file ✗');
+                                    addDataItem('File Header (first 16 bytes)', Array.from(new Uint8Array(arrayBuffer, 0, 16)).map(b => b.toString(16).padStart(2, '0')).join(' '));
+                                };
+                                reader.readAsArrayBuffer(file.slice(0, 16));
+                            } else {
+                                addDataItem(`File from Item ${i}`, 'null - could not get file');
+                            }
+                        } catch (error) {
+                            addDataItem(`File from Item ${i}`, 'Error: ' + error.message);
+                        }
+                    }
+                }
+            }
+            
+            // Check for files via the files property
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                for (let i = 0; i < e.dataTransfer.files.length; i++) {
+                    const file = e.dataTransfer.files[i];
+                    addDataItem(`File ${i} (from files property)`, {
+                        name: file.name,
+                        size: file.size + ' bytes',
+                        type: file.type,
+                        lastModified: new Date(file.lastModified).toLocaleString()
+                    });
+                }
+            }
+            
+            // Check for DownloadURL
+            if (types.includes('DownloadURL')) {
+                const downloadURL = e.dataTransfer.getData('DownloadURL');
+                addDataItem('DownloadURL', downloadURL);
+                
+                // Extract the actual URL from the DownloadURL format
+                let actualUrl = downloadURL;
+                if (downloadURL.includes(':')) {
+                    const parts = downloadURL.split(':');
+                    actualUrl = parts[parts.length - 1];
+                }
+                
+                // Try to fetch the URL to verify it works
+                if (actualUrl) {
+                    addDataItem('Extracted URL', actualUrl);
+                    
+                    // Test if the URL is accessible
+                    fetch(actualUrl, { method: 'HEAD' })
+                        .then(response => {
+                            addDataItem('URL Response', {
+                                status: response.status,
+                                statusText: response.statusText,
+                                contentLength: response.headers.get('content-length') || 'unknown',
+                                contentType: response.headers.get('content-type') || 'unknown'
+                            });
+                            
+                            // If it's a Firebase URL, show Firebase info
+                            if (actualUrl.includes('firebasestorage.googleapis.com')) {
+                                addDataItem('Firebase Storage', 'URL is from Firebase Storage ✓');
+                                
+                                // Create download link for testing
+                                const downloadLink = document.createElement('a');
+                                downloadLink.href = actualUrl;
+                                downloadLink.download = 'test-download.psd';
+                                downloadLink.textContent = 'Test Download Link';
+                                downloadLink.style.cssText = 'display: block; margin: 10px 0; padding: 5px; background: #007bff; color: white; text-decoration: none; border-radius: 3px; text-align: center;';
+                                
+                                const linkItem = document.createElement('div');
+                                linkItem.className = 'data-item';
+                                linkItem.innerHTML = '<div class="data-type">Test Download</div>';
+                                linkItem.appendChild(downloadLink);
+                                output.appendChild(linkItem);
+                            }
+                        })
+                        .catch(error => {
+                            addDataItem('URL Test', 'Error: ' + error.message);
+                        });
+                }
+            }
+            
+            // Check for URI list (common for URL drag and drop)
+            if (types.includes('text/uri-list')) {
+                const uriList = e.dataTransfer.getData('text/uri-list');
+                addDataItem('URI List', uriList);
+                
+                // Test the URI if it looks like a URL
+                if (uriList.startsWith('http')) {
+                    addDataItem('URI Test', 'Testing URI accessibility...');
+                    
+                    fetch(uriList, { method: 'HEAD' })
+                        .then(response => {
+                            addDataItem('URI Response', {
+                                status: response.status,
+                                url: uriList,
+                                contentLength: response.headers.get('content-length') || 'unknown'
+                            });
+                        })
+                        .catch(error => {
+                            addDataItem('URI Test Error', error.message);
+                        });
+                }
+            }
+            
+            // Check for Mozilla URL format
+            if (types.includes('text/x-moz-url')) {
+                const mozUrl = e.dataTransfer.getData('text/x-moz-url');
+                addDataItem('Mozilla URL', mozUrl);
+            }
+            
+            // Check for plain text
+            if (types.includes('text/plain')) {
+                const plainText = e.dataTransfer.getData('text/plain');
+                addDataItem('Plain Text', plainText);
+                
+                // If plain text looks like a URL, test it
+                if (plainText.startsWith('http')) {
+                    addDataItem('Plain Text URL Test', 'Testing URL from plain text...');
+                    
+                    fetch(plainText, { method: 'HEAD' })
+                        .then(response => {
+                            addDataItem('Plain Text URL Response', {
+                                status: response.status,
+                                url: plainText
+                            });
+                        })
+                        .catch(error => {
+                            addDataItem('Plain Text URL Error', error.message);
+                        });
+                }
+            }
+            
+            // Check for custom URL
+            if (types.includes('text/x-psd-url')) {
+                const customURL = e.dataTransfer.getData('text/x-psd-url');
+                addDataItem('Custom PSD URL', customURL);
+                
+                // Try to fetch the blob URL
+                if (customURL.startsWith('blob:')) {
+                    fetch(customURL)
+                        .then(response => response.blob())
+                        .then(blob => {
+                            addDataItem('Blob from Custom URL', {
+                                size: blob.size + ' bytes',
+                                type: blob.type
+                            });
+                        })
+                        .catch(error => {
+                            addDataItem('Blob from Custom URL', 'Error: ' + error.message);
+                        });
+                }
+            }
+            
+            // Check all available data types
+            types.forEach(type => {
+                if (!['Files', 'DownloadURL', 'text/plain', 'text/x-psd-url'].includes(type)) {
+                    try {
+                        const data = e.dataTransfer.getData(type);
+                        if (data) {
+                            addDataItem(`Data Type: ${type}`, data);
+                        }
+                    } catch (err) {
+                        addDataItem(`Data Type: ${type}`, 'Error reading data: ' + err.message);
+                    }
+                }
+            });
+        });
+
+        function addDataItem(label, content) {
+            const item = document.createElement('div');
+            item.className = 'data-item';
+            
+            const typeLabel = document.createElement('div');
+            typeLabel.className = 'data-type';
+            typeLabel.textContent = label;
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'data-content';
+            
+            if (typeof content === 'object') {
+                contentDiv.innerHTML = JSON.stringify(content, null, 2);
+            } else {
+                contentDiv.textContent = content;
+            }
+            
+            item.appendChild(typeLabel);
+            item.appendChild(contentDiv);
+            output.appendChild(item);
+        }
+    </script>
+</body>
+</html> 
