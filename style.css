@@ -769,6 +769,22 @@ input[type="checkbox"] {
     cursor: grabbing;
 }
 
+.drag-psd-btn[draggable="false"] {
+    cursor: not-allowed !important;
+    opacity: 0.6;
+    background-color: #9B9B9B !important;
+}
+
+.drag-psd-btn[draggable="false"]:hover {
+    background-color: #9B9B9B !important;
+    transform: none;
+}
+
+/* Loading animation for uploading state */
+.drag-psd-btn[draggable="false"] svg {
+    animation: spin 1s linear infinite;
+}
+
 /* Visual feedback during drag */
 .drag-psd-btn svg {
     margin-right: 4px;

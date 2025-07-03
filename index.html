@@ -19,12 +19,16 @@
                 Download PSD
             </button>
             
-            <div id="dragPsdBtn" class="download-btn drag-psd-btn" style="display: none;" draggable="true" title="Drag to transfer PSD file path" role="button" tabindex="0">
+            <button id="dragPsdBtn" class="download-btn drag-psd-btn" style="display: none;" draggable="true" title="Drag this URL to another app">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M10.59 13.41c.41.39.41 1.03 0 1.42-.39.39-1.03.39-1.42 0a5.003 5.003 0 0 1 0-7.07l3.54-3.54a5.003 5.003 0 0 1 7.07 0 5.003 5.003 0 0 1 0 7.07l-1.49 1.49c.01-.82-.12-1.64-.4-2.42l.47-.48a2.982 2.982 0 0 0 0-4.24 2.982 2.982 0 0 0-4.24 0l-3.53 3.53a2.982 2.982 0 0 0 0 4.24zm2.82-4.24c.39-.39 1.03-.39 1.42 0a5.003 5.003 0 0 1 0 7.07l-3.54 3.54a5.003 5.003 0 0 1-7.07 0 5.003 5.003 0 0 1 0-7.07l1.49-1.49c-.01.82.12 1.64.4 2.43l-.47.47a2.982 2.982 0 0 0 0 4.24 2.982 2.982 0 0 0 4.24 0l3.53-3.53a2.982 2.982 0 0 0 0-4.24.996.996 0 0 1 0-1.42z" fill="currentColor"/>
+                    <path d="M13 5H11V11H5V13H11V19H13V13H19V11H13V5Z" fill="currentColor"/>
+                    <path d="M3 3H9V5H5V9H3V3Z" fill="currentColor"/>
+                    <path d="M3 21H9V19H5V15H3V21Z" fill="currentColor"/>
+                    <path d="M15 3H21V9H19V5H15V3Z" fill="currentColor"/>
+                    <path d="M15 21H21V15H19V19H15V21Z" fill="currentColor"/>
                 </svg>
-                Drag Path
-            </div>
+                <span id="dragPsdBtnText">Uploading...</span>
+            </button>
         </div>
     </div>
     <div class="container">
@@ -137,6 +141,30 @@
     
     <script src="https://unpkg.com/ag-psd@18.0.1/dist/bundle.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
+        
+        // Initialize Firebase when config is available
+        window.initializeFirebase = function() {
+            if (window.firebaseConfig) {
+                const app = initializeApp(window.firebaseConfig);
+                const storage = getStorage(app);
+                
+                // Make Firebase functions available globally
+                window.firebaseStorage = storage;
+                window.firebaseRef = ref;
+                window.firebaseUploadBytes = uploadBytes;
+                window.firebaseGetDownloadURL = getDownloadURL;
+                window.firebaseDeleteObject = deleteObject;
+                
+                console.log('Firebase initialized successfully');
+            }
+        };
+    </script>
+    
     <script>
         // Make sure agPsd is available to our application
         window.agPsdLibrary = agPsd;

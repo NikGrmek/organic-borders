@@ -167,6 +167,13 @@ document.addEventListener('DOMContentLoaded', () => {
     let lastCreatedPsdData = null; // Store the last created PSD data for direct opening
     let currentPsdBlob = null; // Store the current PSD blob for drag-and-drop
     let currentPsdFileName = null; // Store the current PSD file name
+    let currentPsdFirebaseUrl = null; // Store the Firebase URL for dragging
+    let currentPsdFirebasePath = null; // Store the Firebase path for cleanup
+    
+    // Initialize Firebase when available
+    if (window.initializeFirebase) {
+        window.initializeFirebase();
+    }
     
     // Add CSS for processing message
     const style = document.createElement('style');
@@ -229,6 +236,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const downloadBtn = document.getElementById('downloadBtn');
     const exportPsdBtn = document.getElementById('exportPsdBtn');
     const dragPsdBtn = document.getElementById('dragPsdBtn');
+    const dragPsdBtnText = document.getElementById('dragPsdBtnText');
     const resetFolderBtn = document.getElementById('resetFolderBtn');
     const toolsContainer = document.getElementById('tools-container');
     
@@ -544,7 +552,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Reset drag button state when loading new image
                 currentPsdBlob = null;
                 currentPsdFileName = null;
+                currentPsdFirebaseUrl = null;
+                currentPsdFirebasePath = null;
                 dragPsdBtn.style.display = 'none';
+                dragPsdBtnText.textContent = 'Uploading...';
+                dragPsdBtn.draggable = false;
                 
                 // Re-enable the Remove Background button when a new image is loaded
                 if (removeBackgroundBtn) {
@@ -1850,18 +1862,49 @@ document.addEventListener('DOMContentLoaded', () => {
                 annotation: "Generated with Auto Borders Tool"
             };
             
-            // Download the PSD file first
-            downloadAsPSD(blob, fileName);
-            
-            // Store the blob and filename for drag-and-drop (after download)
+            // Store the blob and filename for drag-and-drop
             currentPsdBlob = blob;
             currentPsdFileName = fileName;
             
-            // Show the drag button and file info after download
-            setTimeout(() => {
-                dragPsdBtn.style.display = 'inline-flex';
-                showDownloadedFileInfo(fileName);
-            }, 100);
+            // Show the drag button in uploading state
+            dragPsdBtn.style.display = 'inline-flex';
+            dragPsdBtnText.textContent = 'Uploading...';
+            dragPsdBtn.draggable = false;
+            
+            // Upload to Firebase and update button when ready
+            uploadPsdToFirebase(blob, fileName)
+                .then((uploadResult) => {
+                    console.log('PSD uploaded to Firebase for drag-and-drop:', uploadResult.url);
+                    currentPsdFirebaseUrl = uploadResult.url;
+                    currentPsdFirebasePath = uploadResult.path;
+                    
+                    // Update button to ready state
+                    dragPsdBtnText.textContent = 'Drag URL';
+                    dragPsdBtn.draggable = true;
+                    dragPsdBtn.title = 'Drag this URL to another app';
+                    
+                    // Clean up after 1 hour (3600000 ms)
+                    setTimeout(() => {
+                        deletePsdFromFirebase(uploadResult.path);
+                        currentPsdFirebaseUrl = null;
+                        currentPsdFirebasePath = null;
+                        dragPsdBtnText.textContent = 'Drag PSD';
+                        dragPsdBtn.title = 'Drag this file to another app';
+                    }, 3600000);
+                })
+                .catch((error) => {
+                    console.error('Error uploading PSD to Firebase:', error);
+                    
+                    // Update button to fallback state
+                    dragPsdBtnText.textContent = 'Drag PSD';
+                    dragPsdBtn.draggable = true;
+                    dragPsdBtn.title = 'Drag this file to another app (using blob URL)';
+                    currentPsdFirebaseUrl = null;
+                    currentPsdFirebasePath = null;
+                });
+            
+            // Download the PSD file
+            downloadAsPSD(blob, fileName);
         } catch (error) {
             console.error('Error creating PSD:', error);
             alert('Failed to create PSD file: ' + error.message);
@@ -2195,46 +2238,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Helper function to get username (best effort)
     function getUserName() {
-        try {
-            // Try to get username from various sources
-            
-            // Method 1: Try to extract from the home directory if available
-            if (typeof navigator !== 'undefined' && navigator.userAgent) {
-                // Check if we're in Electron or a desktop app that might expose this
-                if (window.process && window.process.env && window.process.env.USER) {
-                    return window.process.env.USER;
-                }
-                if (window.process && window.process.env && window.process.env.USERNAME) {
-                    return window.process.env.USERNAME;
-                }
-            }
-            
-            // Method 2: Try to get from local storage if previously saved
-            const savedUsername = localStorage.getItem('username');
-            if (savedUsername) {
-                return savedUsername;
-            }
-            
-            // Method 3: Try to extract from any existing file paths if available
-            // This would be populated if the user has used the File System Access API
-            
-            // Method 4: Try to guess from common environment indicators
-            const platform = navigator.platform.toLowerCase();
-            if (platform.includes('mac')) {
-                // On Mac, common usernames are often short
-                return process?.env?.USER || 'user';
-            } else if (platform.includes('win')) {
-                // On Windows, try common environment variables
-                return process?.env?.USERNAME || process?.env?.USER || 'user';
-            }
-            
-            // Default fallback
-            return 'user';
-            
-        } catch (error) {
-            console.warn('Could not determine username:', error);
-            return 'user';
-        }
+        // Simple approach to guess username from document.cookie or localStorage
+        // This is not reliable but might work in some cases
+        // A better approach would be to ask the user for their downloads path
+        
+        // For this simple example, we'll return a placeholder
+        return 'user';
     }
 
     // Add the function to apply image filters
@@ -3842,15 +3851,22 @@ document.addEventListener('DOMContentLoaded', () => {
         imageDimensionsEl.style.display = 'flex';
     }
     
-    // Handle PSD drag start - drag file path as plain text
-    async function handlePsdDragStart(e) {
-        if (!currentPsdFileName) {
-            console.error('No PSD file available for drag');
+    // Handle PSD drag start
+    function handlePsdDragStart(e) {
+        if (!currentPsdBlob || !currentPsdFileName) {
+            console.error('No PSD data available for drag');
             e.preventDefault();
             return;
         }
         
-        console.log('Starting drag with PSD file path:', currentPsdFileName);
+        // Verify the blob has data
+        if (currentPsdBlob.size === 0) {
+            console.error('PSD blob is empty');
+            e.preventDefault();
+            return;
+        }
+        
+        console.log('Starting drag with PSD:', currentPsdFileName, 'Size:', currentPsdBlob.size, 'bytes');
         
         // Add dragging class for visual feedback
         dragPsdBtn.classList.add('dragging');
@@ -3864,7 +3880,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <path d="M14 2V8H20" fill="currentColor"/>
                 <text x="12" y="16" text-anchor="middle" fill="white" font-size="8" font-weight="bold">PSD</text>
             </svg>
-            📁 ${currentPsdFileName}
+            ${currentPsdFileName}
         `;
         document.body.appendChild(dragImage);
         
@@ -3878,76 +3894,32 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }, 0);
         
-        // Set the effect to allow copying
+        // Set the effect
         e.dataTransfer.effectAllowed = 'copy';
         
-        try {
-            // Clear any existing data first
-            e.dataTransfer.clearData();
-            
-            // Get the full file path to the downloaded PSD
-            const downloadsPath = getDownloadsPath();
-            let filePath;
-            
-            if (downloadsPath) {
-                // Create the full file path
-                filePath = `${downloadsPath}/${currentPsdFileName}`;
-                console.log('Setting file path for drag:', filePath);
-            } else {
-                // Fallback to just the filename if we can't determine the path
-                filePath = currentPsdFileName;
-                console.log('Could not determine Downloads path, using filename:', filePath);
+        // Use Firebase URL if available, otherwise fall back to blob URL
+        if (currentPsdFirebaseUrl) {
+            console.log('Using Firebase URL for drag:', currentPsdFirebaseUrl);
+            e.dataTransfer.setData('text/uri-list', currentPsdFirebaseUrl);
+            e.dataTransfer.setData('text/plain', currentPsdFirebaseUrl);
+            e.dataTransfer.setData('DownloadURL', `image/vnd.adobe.photoshop:${currentPsdFileName}:${currentPsdFirebaseUrl}`);
+        } else {
+            console.log('Firebase URL not available, using blob URL fallback');
+            // Fallback to blob URL if Firebase URL is not available
+            try {
+                const url = URL.createObjectURL(currentPsdBlob);
+                e.dataTransfer.setData('text/uri-list', url);
+                e.dataTransfer.setData('text/plain', url);
+                e.dataTransfer.setData('DownloadURL', `image/vnd.adobe.photoshop:${currentPsdFileName}:${url}`);
+                
+                // Clean up the URL after a delay
+                setTimeout(() => {
+                    URL.revokeObjectURL(url);
+                }, 5000);
+            } catch (fallbackError) {
+                console.error('Fallback URL creation failed:', fallbackError);
+                e.dataTransfer.setData('text/plain', currentPsdFileName);
             }
-            
-            // Set the file path as plain text (primary data)
-            e.dataTransfer.setData('text/plain', filePath);
-            
-            // Also set as URI list for applications that support file URIs
-            if (downloadsPath) {
-                const fileUri = `file://${filePath}`;
-                e.dataTransfer.setData('text/uri-list', fileUri);
-                e.dataTransfer.setData('text/x-moz-url', `${fileUri}\n${currentPsdFileName}`);
-                console.log('Set file URI:', fileUri);
-            }
-            
-            // Set additional text formats for compatibility
-            e.dataTransfer.setData('text/x-file-path', filePath);
-            e.dataTransfer.setData('application/x-file-path', filePath);
-            
-            console.log('Drag setup complete. File path set as:', filePath);
-            console.log('Available data types:', Array.from(e.dataTransfer.types));
-            
-        } catch (error) {
-            console.error('Error setting up file path drag:', error);
-            // Fallback: just set the filename
-            e.dataTransfer.setData('text/plain', currentPsdFileName);
-        }
-    }
-    
-    // Helper function to get Downloads path based on platform
-    function getDownloadsPath() {
-        try {
-            // Try to determine the Downloads folder path based on platform
-            const platform = navigator.platform.toLowerCase();
-            const userAgent = navigator.userAgent.toLowerCase();
-            
-            // Get a reasonable username fallback
-            const username = getUserName() || 'user';
-            
-            if (platform.includes('mac') || userAgent.includes('mac')) {
-                return `/Users/${username}/Downloads`;
-            } else if (platform.includes('win') || userAgent.includes('windows')) {
-                return `C:\\Users\\${username}\\Downloads`;
-            } else if (platform.includes('linux') || userAgent.includes('linux')) {
-                return `/home/${username}/Downloads`;
-            } else {
-                // Generic fallback
-                console.log('Unknown platform, using generic Downloads path');
-                return `./Downloads`;
-            }
-        } catch (error) {
-            console.warn('Could not determine Downloads path:', error);
-            return './Downloads'; // Generic fallback
         }
     }
     
@@ -3957,111 +3929,63 @@ document.addEventListener('DOMContentLoaded', () => {
         dragPsdBtn.classList.remove('dragging');
     }
     
-    // Show information about the downloaded file
-    function showDownloadedFileInfo(fileName) {
-        // Get the file path for display
-        const downloadsPath = getDownloadsPath();
-        const filePath = downloadsPath ? `${downloadsPath}/${fileName}` : fileName;
-        
-        // Update the drag button tooltip
-        dragPsdBtn.title = `Drag to transfer file path: ${filePath}`;
-        
-        // Create a subtle notification that the file was saved
-        const notification = document.createElement('div');
-        notification.style.cssText = `
-            position: fixed;
-            top: 60px;
-            right: 20px;
-            background: #4CAF50;
-            color: white;
-            padding: 12px 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            z-index: 10000;
-            font-size: 14px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            max-width: 450px;
-            opacity: 0;
-            transform: translateX(100%);
-            transition: all 0.3s ease;
-        `;
-        
-        notification.innerHTML = `
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" fill="currentColor"/>
-            </svg>
-            <div>
-                <div style="font-weight: 600;">PSD saved to Downloads</div>
-                <div style="font-size: 12px; opacity: 0.9;">Drag purple button to transfer file path as text</div>
-                <div style="font-size: 11px; opacity: 0.8; margin-top: 2px; font-family: monospace;">${filePath}</div>
-            </div>
-            <button style="background: none; border: none; color: white; font-size: 18px; cursor: pointer; padding: 4px;" onclick="this.parentElement.remove()">×</button>
-        `;
-        
-        document.body.appendChild(notification);
-        
-        // Animate in
-        setTimeout(() => {
-            notification.style.opacity = '1';
-            notification.style.transform = 'translateX(0)';
-        }, 10);
-        
-        // Auto-remove after 7 seconds (longer since there's more info to read)
-        setTimeout(() => {
-            if (document.body.contains(notification)) {
-                notification.style.opacity = '0';
-                notification.style.transform = 'translateX(100%)';
-                setTimeout(() => {
-                    if (document.body.contains(notification)) {
-                        notification.remove();
-                    }
-                }, 300);
+    // Function to upload PSD to Firebase Storage
+    async function uploadPsdToFirebase(blob, fileName) {
+        return new Promise((resolve, reject) => {
+            // Check if Firebase is available
+            if (!window.firebaseStorage || !window.firebaseRef || !window.firebaseUploadBytes || !window.firebaseGetDownloadURL) {
+                reject(new Error('Firebase Storage is not initialized'));
+                return;
             }
-        }, 7000);
-        
-        // Add click handler to open Downloads folder (if supported)
-        notification.addEventListener('click', (e) => {
-            if (e.target.tagName !== 'BUTTON') {
-                openDownloadsFolder();
+            
+            try {
+                // Create a reference to the temp folder in Firebase Storage
+                const timestamp = Date.now();
+                const uniqueFileName = `${timestamp}_${fileName}`;
+                const storageRef = window.firebaseRef(window.firebaseStorage, `temp/${uniqueFileName}`);
+                
+                console.log('Uploading PSD to Firebase:', uniqueFileName);
+                
+                // Upload the blob
+                window.firebaseUploadBytes(storageRef, blob)
+                    .then((snapshot) => {
+                        console.log('PSD uploaded successfully to Firebase');
+                        
+                        // Get the download URL
+                        return window.firebaseGetDownloadURL(snapshot.ref);
+                    })
+                    .then((downloadURL) => {
+                        console.log('Firebase download URL:', downloadURL);
+                        resolve({
+                            url: downloadURL,
+                            fileName: uniqueFileName,
+                            path: `temp/${uniqueFileName}`
+                        });
+                    })
+                    .catch((error) => {
+                        console.error('Error uploading to Firebase:', error);
+                        reject(error);
+                    });
+            } catch (error) {
+                console.error('Error setting up Firebase upload:', error);
+                reject(error);
             }
         });
     }
     
-    // Function to try opening Downloads folder
-    function openDownloadsFolder() {
+    // Function to delete PSD from Firebase Storage (cleanup)
+    async function deletePsdFromFirebase(path) {
+        if (!window.firebaseStorage || !window.firebaseRef || !window.firebaseDeleteObject) {
+            console.warn('Firebase Storage is not initialized, cannot delete file');
+            return;
+        }
+        
         try {
-            // For desktop apps that support it
-            if (window.electronAPI && window.electronAPI.openDownloadsFolder) {
-                window.electronAPI.openDownloadsFolder();
-                return;
-            }
-            
-            // For web browsers - try to open Downloads URL
-            const platform = navigator.platform.toLowerCase();
-            
-            if (platform.includes('mac')) {
-                // Try to open Downloads folder on macOS
-                window.open('file:///Users/' + getUserName() + '/Downloads');
-            } else if (platform.includes('win')) {
-                // Windows - this won't work from web browser due to security
-                console.log('To access the downloaded file: Press Ctrl+J to open Downloads in your browser, or open File Explorer and go to Downloads folder');
-            } else {
-                // Linux and others
-                console.log('PSD file saved to Downloads folder');
-            }
-            
-            // Fallback: Show browser downloads
-            console.log('Opening browser downloads...');
-            // Most browsers use Ctrl+Shift+Y or Ctrl+J
-            const shortcut = navigator.userAgent.includes('Chrome') ? 'Ctrl+J' : 
-                           navigator.userAgent.includes('Firefox') ? 'Ctrl+Shift+Y' : 'Ctrl+J';
-            
-            console.log(`You can also press ${shortcut} to open your browser's Downloads page`);
-            
+            const storageRef = window.firebaseRef(window.firebaseStorage, path);
+            await window.firebaseDeleteObject(storageRef);
+            console.log('Temporary PSD file deleted from Firebase:', path);
         } catch (error) {
-            console.log('Could not open Downloads folder automatically. Please check your Downloads folder for the PSD file.');
+            console.error('Error deleting PSD from Firebase:', error);
         }
     }
 }); 
