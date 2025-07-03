@@ -1,0 +1,27 @@
+[
+  {
+    "origin": [
+      "https://*.github.io",
+      "https://nikgrmek.github.io",
+      "http://localhost:*",
+      "http://127.0.0.1:*",
+      "http://localhost:5173",
+      "http://localhost:3000",
+      "http://localhost:8080"
+    ],
+    "method": ["GET", "POST", "PUT", "DELETE", "HEAD"],
+    "maxAgeSeconds": 3600,
+    "responseHeader": [
+      "Content-Type",
+      "Access-Control-Allow-Origin",
+      "Access-Control-Allow-Headers",
+      "Access-Control-Allow-Methods",
+      "x-goog-acl",
+      "x-goog-content-length-range",
+      "x-goog-content-type",
+      "x-goog-date",
+      "x-goog-resumable",
+      "x-goog-meta-*"
+    ]
+  }
+] 
