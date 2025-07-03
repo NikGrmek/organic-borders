@@ -53,12 +53,12 @@
     </style>
 </head>
 <body>
-    <h1>PSD Drop Test Page</h1>
-    <p><strong>Updated approach:</strong> The PSD file is now downloaded to your Downloads folder first, then the drag operation transfers that file.</p>
-    <p>Drag the purple "Drag PSD" button from your app to the drop zone below to see what data is received:</p>
+    <h1>PSD File Path Drop Test</h1>
+    <p><strong>File Path Approach:</strong> The app now downloads the PSD file and then transfers the file path as plain text.</p>
+    <p>Drag the purple "Drag Path" button from your app to see the file path that's transferred:</p>
     
     <div class="drop-zone" id="dropZone">
-        <p>Drop your PSD file here</p>
+        <p>Drop here to see the PSD file path</p>
     </div>
     
     <div class="output" id="output">
@@ -191,10 +191,27 @@
                 }
             }
             
-            // Check for plain text
+            // Check for plain text (this should be the file path)
             if (types.includes('text/plain')) {
                 const plainText = e.dataTransfer.getData('text/plain');
-                addDataItem('Plain Text', plainText);
+                addDataItem('Plain Text (File Path)', plainText);
+                
+                // Validate if it looks like a file path
+                const isFilePath = plainText.includes('/') || plainText.includes('\\') || plainText.includes('.psd');
+                addDataItem('File Path Validation', isFilePath ? 'Valid file path format ✓' : 'Not a file path format ✗');
+                
+                // Extract filename from path
+                const filename = plainText.split(/[/\\]/).pop();
+                if (filename && filename !== plainText) {
+                    addDataItem('Extracted Filename', filename);
+                }
+                
+                // Check if it's a PSD file
+                if (plainText.toLowerCase().endsWith('.psd')) {
+                    addDataItem('File Type Check', 'PSD file detected ✓');
+                } else {
+                    addDataItem('File Type Check', 'Not a PSD file ✗');
+                }
             }
             
             // Check for custom URL
@@ -218,9 +235,44 @@
                 }
             }
             
-            // Check all available data types
+            // Check for file URI list
+            if (types.includes('text/uri-list')) {
+                const uriList = e.dataTransfer.getData('text/uri-list');
+                addDataItem('URI List', uriList);
+                
+                // Validate if it's a file URI
+                if (uriList.startsWith('file://')) {
+                    addDataItem('File URI Check', 'Valid file URI ✓');
+                } else {
+                    addDataItem('File URI Check', 'Not a file URI ✗');
+                }
+            }
+            
+            // Check for Mozilla URL format
+            if (types.includes('text/x-moz-url')) {
+                const mozUrl = e.dataTransfer.getData('text/x-moz-url');
+                addDataItem('Mozilla URL Format', mozUrl);
+            }
+            
+            // Check for file path specific types
+            if (types.includes('text/x-file-path')) {
+                const filePath = e.dataTransfer.getData('text/x-file-path');
+                addDataItem('File Path (x-file-path)', filePath);
+            }
+            
+            if (types.includes('application/x-file-path')) {
+                const appFilePath = e.dataTransfer.getData('application/x-file-path');
+                addDataItem('File Path (application)', appFilePath);
+            }
+            
+            // Check all remaining data types
             types.forEach(type => {
-                if (!['Files', 'DownloadURL', 'text/plain', 'text/x-psd-url'].includes(type)) {
+                const checkedTypes = [
+                    'Files', 'DownloadURL', 'text/plain', 'text/x-psd-url', 
+                    'text/uri-list', 'text/x-moz-url', 'text/x-file-path', 'application/x-file-path'
+                ];
+                
+                if (!checkedTypes.includes(type)) {
                     try {
                         const data = e.dataTransfer.getData(type);
                         if (data) {

@@ -2195,12 +2195,46 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Helper function to get username (best effort)
     function getUserName() {
-        // Simple approach to guess username from document.cookie or localStorage
-        // This is not reliable but might work in some cases
-        // A better approach would be to ask the user for their downloads path
-        
-        // For this simple example, we'll return a placeholder
-        return 'user';
+        try {
+            // Try to get username from various sources
+            
+            // Method 1: Try to extract from the home directory if available
+            if (typeof navigator !== 'undefined' && navigator.userAgent) {
+                // Check if we're in Electron or a desktop app that might expose this
+                if (window.process && window.process.env && window.process.env.USER) {
+                    return window.process.env.USER;
+                }
+                if (window.process && window.process.env && window.process.env.USERNAME) {
+                    return window.process.env.USERNAME;
+                }
+            }
+            
+            // Method 2: Try to get from local storage if previously saved
+            const savedUsername = localStorage.getItem('username');
+            if (savedUsername) {
+                return savedUsername;
+            }
+            
+            // Method 3: Try to extract from any existing file paths if available
+            // This would be populated if the user has used the File System Access API
+            
+            // Method 4: Try to guess from common environment indicators
+            const platform = navigator.platform.toLowerCase();
+            if (platform.includes('mac')) {
+                // On Mac, common usernames are often short
+                return process?.env?.USER || 'user';
+            } else if (platform.includes('win')) {
+                // On Windows, try common environment variables
+                return process?.env?.USERNAME || process?.env?.USER || 'user';
+            }
+            
+            // Default fallback
+            return 'user';
+            
+        } catch (error) {
+            console.warn('Could not determine username:', error);
+            return 'user';
+        }
     }
 
     // Add the function to apply image filters
@@ -3808,22 +3842,15 @@ document.addEventListener('DOMContentLoaded', () => {
         imageDimensionsEl.style.display = 'flex';
     }
     
-    // Handle PSD drag start
+    // Handle PSD drag start - drag file path as plain text
     async function handlePsdDragStart(e) {
-        if (!currentPsdBlob || !currentPsdFileName) {
-            console.error('No PSD data available for drag');
+        if (!currentPsdFileName) {
+            console.error('No PSD file available for drag');
             e.preventDefault();
             return;
         }
         
-        // Verify the blob has data
-        if (currentPsdBlob.size === 0) {
-            console.error('PSD blob is empty');
-            e.preventDefault();
-            return;
-        }
-        
-        console.log('Starting drag with downloaded PSD:', currentPsdFileName, 'Size:', currentPsdBlob.size, 'bytes');
+        console.log('Starting drag with PSD file path:', currentPsdFileName);
         
         // Add dragging class for visual feedback
         dragPsdBtn.classList.add('dragging');
@@ -3837,7 +3864,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <path d="M14 2V8H20" fill="currentColor"/>
                 <text x="12" y="16" text-anchor="middle" fill="white" font-size="8" font-weight="bold">PSD</text>
             </svg>
-            📄 ${currentPsdFileName}
+            📁 ${currentPsdFileName}
         `;
         document.body.appendChild(dragImage);
         
@@ -3851,86 +3878,48 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }, 0);
         
-        // Set the effect to allow copying and moving
-        e.dataTransfer.effectAllowed = 'copyMove';
+        // Set the effect to allow copying
+        e.dataTransfer.effectAllowed = 'copy';
         
         try {
             // Clear any existing data first
             e.dataTransfer.clearData();
             
-            // Create a File object that represents the downloaded file
-            const file = new File([currentPsdBlob], currentPsdFileName, { 
-                type: 'image/vnd.adobe.photoshop',
-                lastModified: Date.now()
-            });
-            
-            console.log('Created file object for downloaded PSD:', file);
-            
-            // Method 1: Try to use File System Access API if available (Chrome/Edge)
-            if ('showSaveFilePicker' in window) {
-                console.log('File System Access API available - using enhanced file transfer');
-                
-                // Add the file via DataTransferItemList
-                if (e.dataTransfer.items && e.dataTransfer.items.add) {
-                    try {
-                        const item = e.dataTransfer.items.add(file);
-                        console.log('Added file via File System Access API:', item);
-                    } catch (error) {
-                        console.warn('File System Access API failed:', error);
-                    }
-                }
-            } else {
-                console.log('File System Access API not available - using fallback methods');
-            }
-            
-            // Method 2: Standard File API approach
-            if (e.dataTransfer.items && e.dataTransfer.items.add) {
-                try {
-                    const item = e.dataTransfer.items.add(file);
-                    console.log('Added file via standard File API:', item);
-                } catch (fileError) {
-                    console.warn('Standard File API failed:', fileError);
-                }
-            }
-            
-            // Method 3: Create blob URL for DownloadURL approach
-            const blobUrl = URL.createObjectURL(currentPsdBlob);
-            
-            // Set DownloadURL in proper format for file managers
-            const downloadUrl = `image/vnd.adobe.photoshop:${currentPsdFileName}:${blobUrl}`;
-            e.dataTransfer.setData('DownloadURL', downloadUrl);
-            console.log('Set DownloadURL:', downloadUrl);
-            
-            // Method 4: Set file path hint for applications that support it
+            // Get the full file path to the downloaded PSD
             const downloadsPath = getDownloadsPath();
+            let filePath;
+            
             if (downloadsPath) {
-                const filePath = `${downloadsPath}/${currentPsdFileName}`;
-                e.dataTransfer.setData('text/uri-list', `file://${filePath}`);
-                e.dataTransfer.setData('text/x-moz-url', `file://${filePath}\n${currentPsdFileName}`);
-                console.log('Set file path hint:', filePath);
+                // Create the full file path
+                filePath = `${downloadsPath}/${currentPsdFileName}`;
+                console.log('Setting file path for drag:', filePath);
+            } else {
+                // Fallback to just the filename if we can't determine the path
+                filePath = currentPsdFileName;
+                console.log('Could not determine Downloads path, using filename:', filePath);
             }
             
-            // Method 5: Set additional MIME types and formats
-            e.dataTransfer.setData('application/octet-stream', blobUrl);
-            e.dataTransfer.setData('application/x-photoshop', blobUrl);
-            e.dataTransfer.setData('Files', ''); // Indicate we have files
+            // Set the file path as plain text (primary data)
+            e.dataTransfer.setData('text/plain', filePath);
             
-            // Store blob URL for cleanup and potential access
-            e.dataTransfer.setData('text/x-psd-url', blobUrl);
+            // Also set as URI list for applications that support file URIs
+            if (downloadsPath) {
+                const fileUri = `file://${filePath}`;
+                e.dataTransfer.setData('text/uri-list', fileUri);
+                e.dataTransfer.setData('text/x-moz-url', `${fileUri}\n${currentPsdFileName}`);
+                console.log('Set file URI:', fileUri);
+            }
             
-            // Set plain text as final fallback
-            e.dataTransfer.setData('text/plain', currentPsdFileName);
+            // Set additional text formats for compatibility
+            e.dataTransfer.setData('text/x-file-path', filePath);
+            e.dataTransfer.setData('application/x-file-path', filePath);
             
-            // Clean up the URL after drag completes
-            setTimeout(() => {
-                URL.revokeObjectURL(blobUrl);
-            }, 15000);
-            
-            console.log('Drag setup complete for downloaded file. Available types:', Array.from(e.dataTransfer.types));
+            console.log('Drag setup complete. File path set as:', filePath);
+            console.log('Available data types:', Array.from(e.dataTransfer.types));
             
         } catch (error) {
-            console.error('Error setting up drag for downloaded file:', error);
-            // Fallback: just set the filename as text
+            console.error('Error setting up file path drag:', error);
+            // Fallback: just set the filename
             e.dataTransfer.setData('text/plain', currentPsdFileName);
         }
     }
@@ -3938,21 +3927,28 @@ document.addEventListener('DOMContentLoaded', () => {
     // Helper function to get Downloads path based on platform
     function getDownloadsPath() {
         try {
-            // Try to determine the Downloads folder path
+            // Try to determine the Downloads folder path based on platform
             const platform = navigator.platform.toLowerCase();
             const userAgent = navigator.userAgent.toLowerCase();
             
-            if (platform.includes('mac')) {
-                return `/Users/${getUserName()}/Downloads`;
-            } else if (platform.includes('win')) {
-                return `C:\\Users\\${getUserName()}\\Downloads`;
-            } else if (platform.includes('linux')) {
-                return `/home/${getUserName()}/Downloads`;
+            // Get a reasonable username fallback
+            const username = getUserName() || 'user';
+            
+            if (platform.includes('mac') || userAgent.includes('mac')) {
+                return `/Users/${username}/Downloads`;
+            } else if (platform.includes('win') || userAgent.includes('windows')) {
+                return `C:\\Users\\${username}\\Downloads`;
+            } else if (platform.includes('linux') || userAgent.includes('linux')) {
+                return `/home/${username}/Downloads`;
+            } else {
+                // Generic fallback
+                console.log('Unknown platform, using generic Downloads path');
+                return `./Downloads`;
             }
         } catch (error) {
             console.warn('Could not determine Downloads path:', error);
+            return './Downloads'; // Generic fallback
         }
-        return null;
     }
     
     // Handle PSD drag end
@@ -3963,8 +3959,12 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Show information about the downloaded file
     function showDownloadedFileInfo(fileName) {
+        // Get the file path for display
+        const downloadsPath = getDownloadsPath();
+        const filePath = downloadsPath ? `${downloadsPath}/${fileName}` : fileName;
+        
         // Update the drag button tooltip
-        dragPsdBtn.title = `Drag ${fileName} to another app (File saved to Downloads)`;
+        dragPsdBtn.title = `Drag to transfer file path: ${filePath}`;
         
         // Create a subtle notification that the file was saved
         const notification = document.createElement('div');
@@ -3982,7 +3982,7 @@ document.addEventListener('DOMContentLoaded', () => {
             display: flex;
             align-items: center;
             gap: 12px;
-            max-width: 400px;
+            max-width: 450px;
             opacity: 0;
             transform: translateX(100%);
             transition: all 0.3s ease;
@@ -3994,7 +3994,8 @@ document.addEventListener('DOMContentLoaded', () => {
             </svg>
             <div>
                 <div style="font-weight: 600;">PSD saved to Downloads</div>
-                <div style="font-size: 12px; opacity: 0.9;">You can now drag the purple button to other apps</div>
+                <div style="font-size: 12px; opacity: 0.9;">Drag purple button to transfer file path as text</div>
+                <div style="font-size: 11px; opacity: 0.8; margin-top: 2px; font-family: monospace;">${filePath}</div>
             </div>
             <button style="background: none; border: none; color: white; font-size: 18px; cursor: pointer; padding: 4px;" onclick="this.parentElement.remove()">×</button>
         `;
@@ -4007,7 +4008,7 @@ document.addEventListener('DOMContentLoaded', () => {
             notification.style.transform = 'translateX(0)';
         }, 10);
         
-        // Auto-remove after 5 seconds
+        // Auto-remove after 7 seconds (longer since there's more info to read)
         setTimeout(() => {
             if (document.body.contains(notification)) {
                 notification.style.opacity = '0';
@@ -4018,7 +4019,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }, 300);
             }
-        }, 5000);
+        }, 7000);
         
         // Add click handler to open Downloads folder (if supported)
         notification.addEventListener('click', (e) => {
