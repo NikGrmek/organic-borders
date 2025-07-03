@@ -815,30 +815,42 @@ input[type="checkbox"] {
 /* Render button styles */
 .render-btn {
     background-color: #212529 !important;
-    color: white;
-    cursor: pointer;
+    color: white !important;
+    cursor: pointer !important;
     position: relative;
-    display: flex;
+    display: flex !important;
     align-items: center;
     gap: 8px;
+    width: auto !important; /* Override download-btn width */
+    margin-top: 0 !important; /* Override download-btn margin */
 }
 
 .render-btn:hover {
     background-color: #1a1e23 !important;
+    transform: none !important; /* Prevent scaling */
 }
 
 .render-btn:disabled {
     background-color: #6c757d !important;
-    cursor: not-allowed;
+    cursor: not-allowed !important;
     opacity: 0.7;
 }
 
 .render-btn:disabled:hover {
     background-color: #6c757d !important;
+    transform: none !important;
 }
 
 .render-btn .spinner {
     width: 20px;
     height: 20px;
     margin: 0;
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #212529;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+.render-btn:disabled .spinner {
+    border-top-color: #ffffff;
 }

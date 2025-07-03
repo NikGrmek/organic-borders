@@ -1955,9 +1955,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     currentPsdFirebasePath = uploadResult.path;
                     
                     // Update button to ready state
-                    dragPsdBtnText.textContent = 'Drag URL';
+                    dragPsdBtnText.textContent = 'Drag to AE';
                     dragPsdBtn.draggable = true;
-                    dragPsdBtn.title = 'Drag this URL to another app';
+                    dragPsdBtn.title = 'Drag this URL to After Effects';
                     
                     // Clean up after 1 hour (3600000 ms)
                     setTimeout(() => {
@@ -2132,9 +2132,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     currentPsdFirebasePath = uploadResult.path;
                     
                     // Update button to ready state
-                    dragPsdBtnText.textContent = 'Drag URL';
+                    dragPsdBtnText.textContent = 'Drag to AE';
                     dragPsdBtn.draggable = true;
-                    dragPsdBtn.title = 'Drag this URL to another app';
+                    dragPsdBtn.title = 'Drag this URL to After Effects';
                     
                     // Clean up after 1 hour (3600000 ms)
                     setTimeout(() => {
