@@ -165,6 +165,8 @@ async function removeBackground(imageFile) {
 document.addEventListener('DOMContentLoaded', () => {
     // Global variables 
     let lastCreatedPsdData = null; // Store the last created PSD data for direct opening
+    let currentPsdBlob = null; // Store the current PSD blob for drag-and-drop
+    let currentPsdFileName = null; // Store the current PSD file name
     
     // Add CSS for processing message
     const style = document.createElement('style');
@@ -226,6 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let controlPointsCanvas;
     const downloadBtn = document.getElementById('downloadBtn');
     const exportPsdBtn = document.getElementById('exportPsdBtn');
+    const dragPsdBtn = document.getElementById('dragPsdBtn');
     const resetFolderBtn = document.getElementById('resetFolderBtn');
     const toolsContainer = document.getElementById('tools-container');
     
@@ -289,6 +292,7 @@ document.addEventListener('DOMContentLoaded', () => {
     toolsContainer.style.display = 'none';
     downloadBtn.style.display = 'none';
     exportPsdBtn.style.display = 'none';
+    dragPsdBtn.style.display = 'none';
     // Add null check for resetFolderBtn before trying to access its style property
     if (resetFolderBtn) {
         resetFolderBtn.style.display = 'none';
@@ -316,6 +320,12 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Add clipboard paste event listener (Cmd+V / Ctrl+V)
     document.addEventListener('paste', handleClipboardPaste);
+    
+    // Set up drag events for PSD button
+    if (dragPsdBtn) {
+        dragPsdBtn.addEventListener('dragstart', handlePsdDragStart);
+        dragPsdBtn.addEventListener('dragend', handlePsdDragEnd);
+    }
     
     // Thickness slider with regular functionality
     thicknessRange.addEventListener('input', (e) => {
@@ -530,6 +540,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 downloadBtn.style.display = 'block';
                 exportPsdBtn.style.display = 'block';
                 removeBackgroundBtn.style.display = 'block';
+                
+                // Reset drag button state when loading new image
+                currentPsdBlob = null;
+                currentPsdFileName = null;
+                dragPsdBtn.style.display = 'none';
                 
                 // Re-enable the Remove Background button when a new image is loaded
                 if (removeBackgroundBtn) {
@@ -1817,6 +1832,15 @@ document.addEventListener('DOMContentLoaded', () => {
             // Create a blob from the PSD buffer
             const blob = new Blob([psdBuffer], { type: 'image/vnd.adobe.photoshop' });
             
+            // Verify blob creation
+            console.log('PSD blob created:', fileName, 'Size:', blob.size, 'bytes');
+            
+            if (blob.size === 0) {
+                console.error('Warning: PSD blob is empty!');
+                alert('Error: Generated PSD file is empty. Please try again.');
+                return;
+            }
+            
             // Store the last created PSD data for direct opening
             lastCreatedPsdData = {
                 buffer: psdBuffer,
@@ -1825,6 +1849,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 tags: ['polygon-border', 'auto-border', 'generated', 'psd'],
                 annotation: "Generated with Auto Borders Tool"
             };
+            
+            // Store the blob and filename for drag-and-drop
+            currentPsdBlob = blob;
+            currentPsdFileName = fileName;
+            
+            // Show the drag button
+            dragPsdBtn.style.display = 'inline-flex';
             
             // Download the PSD file
             downloadAsPSD(blob, fileName);
@@ -3772,5 +3803,99 @@ document.addEventListener('DOMContentLoaded', () => {
         
         imageDimensionsEl.textContent = text;
         imageDimensionsEl.style.display = 'flex';
+    }
+    
+    // Handle PSD drag start
+    function handlePsdDragStart(e) {
+        if (!currentPsdBlob || !currentPsdFileName) {
+            console.error('No PSD data available for drag');
+            e.preventDefault();
+            return;
+        }
+        
+        // Verify the blob has data
+        if (currentPsdBlob.size === 0) {
+            console.error('PSD blob is empty');
+            e.preventDefault();
+            return;
+        }
+        
+        console.log('Starting drag with PSD:', currentPsdFileName, 'Size:', currentPsdBlob.size, 'bytes');
+        
+        // Add dragging class for visual feedback
+        dragPsdBtn.classList.add('dragging');
+        
+        // Create a custom drag image
+        const dragImage = document.createElement('div');
+        dragImage.className = 'drag-ghost';
+        dragImage.innerHTML = `
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2Z" fill="currentColor" opacity="0.8"/>
+                <path d="M14 2V8H20" fill="currentColor"/>
+                <text x="12" y="16" text-anchor="middle" fill="white" font-size="8" font-weight="bold">PSD</text>
+            </svg>
+            ${currentPsdFileName}
+        `;
+        document.body.appendChild(dragImage);
+        
+        // Set the drag image
+        e.dataTransfer.setDragImage(dragImage, 0, 0);
+        
+        // Remove the drag image after a short delay
+        setTimeout(() => {
+            if (document.body.contains(dragImage)) {
+                document.body.removeChild(dragImage);
+            }
+        }, 0);
+        
+        // Set the effect
+        e.dataTransfer.effectAllowed = 'copy';
+        
+        try {
+            // Create a blob URL for the file
+            const url = URL.createObjectURL(currentPsdBlob);
+            
+            // Set download URL (this is the most reliable method for file transfers)
+            e.dataTransfer.setData('DownloadURL', `image/vnd.adobe.photoshop:${currentPsdFileName}:${url}`);
+            
+            // Try to add the file directly (modern browsers)
+            if (e.dataTransfer.items) {
+                try {
+                    // Create a file from the blob
+                    const file = new File([currentPsdBlob], currentPsdFileName, { 
+                        type: 'image/vnd.adobe.photoshop',
+                        lastModified: Date.now()
+                    });
+                    
+                    // Add the file to the drag data
+                    e.dataTransfer.items.add(file);
+                    console.log('Added file to drag data:', file.name, file.size, 'bytes');
+                } catch (fileError) {
+                    console.warn('Could not add file to drag data:', fileError);
+                }
+            }
+            
+            // Store the URL for cleanup
+            e.dataTransfer.setData('text/x-psd-url', url);
+            
+            // Also set plain text as fallback
+            e.dataTransfer.setData('text/plain', currentPsdFileName);
+            
+            // Clean up the URL after a longer delay to ensure drag completes
+            setTimeout(() => {
+                URL.revokeObjectURL(url);
+            }, 5000);
+            
+        } catch (error) {
+            console.error('Error setting drag data:', error);
+            // Fallback: just set the filename as text
+            e.dataTransfer.setData('text/plain', currentPsdFileName);
+        }
+    }
+    
+    // Handle PSD drag end
+    function handlePsdDragEnd(e) {
+        // Remove dragging class
+        dragPsdBtn.classList.remove('dragging');
     }
 }); 
