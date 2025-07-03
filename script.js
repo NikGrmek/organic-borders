@@ -24,12 +24,28 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Initialize Firebase when available
     if (window.initializeFirebase) {
-        window.initializeFirebase();
-        
-        // Clean up old temp files on startup (with a small delay to ensure Firebase is ready)
-        setTimeout(() => {
-            cleanupOldTempFiles();
-        }, 2000);
+        try {
+            window.initializeFirebase();
+            console.log('Firebase initialization requested');
+            
+            // Check if Firebase is properly initialized after a short delay
+            setTimeout(() => {
+                if (!window.firebaseStorage) {
+                    console.error('Firebase Storage not available after initialization');
+                    console.log('This might be due to CORS restrictions on GitHub Pages');
+                } else {
+                    console.log('Firebase Storage is available');
+                    // Clean up old temp files on startup
+                    cleanupOldTempFiles().catch(error => {
+                        console.warn('Initial cleanup failed:', error);
+                    });
+                }
+            }, 2000);
+        } catch (error) {
+            console.error('Error during Firebase initialization:', error);
+        }
+    } else {
+        console.warn('Firebase initialization function not found');
     }
     
     // Add CSS for processing messages
@@ -3562,7 +3578,20 @@ document.addEventListener('DOMContentLoaded', () => {
         return new Promise((resolve, reject) => {
             // Check if Firebase is available
             if (!window.firebaseStorage || !window.firebaseRef || !window.firebaseUploadBytes || !window.firebaseGetDownloadURL) {
-                reject(new Error('Firebase Storage is not initialized'));
+                const missingFunctions = [];
+                if (!window.firebaseStorage) missingFunctions.push('firebaseStorage');
+                if (!window.firebaseRef) missingFunctions.push('firebaseRef');
+                if (!window.firebaseUploadBytes) missingFunctions.push('firebaseUploadBytes');
+                if (!window.firebaseGetDownloadURL) missingFunctions.push('firebaseGetDownloadURL');
+                
+                console.error('Firebase Storage is not properly initialized. Missing:', missingFunctions.join(', '));
+                console.log('This is common on GitHub Pages due to CORS restrictions.');
+                console.log('To fix this, you need to:');
+                console.log('1. Go to Firebase Console > Storage > Rules');
+                console.log('2. Add CORS configuration to allow your GitHub Pages domain');
+                console.log('3. Ensure Storage rules allow uploads without authentication');
+                
+                reject(new Error('Firebase Storage not available (CORS/initialization issue)'));
                 return;
             }
             
@@ -3597,6 +3626,28 @@ document.addEventListener('DOMContentLoaded', () => {
                     })
                     .catch((error) => {
                         console.error('Error uploading to Firebase:', error);
+                        console.error('Error code:', error.code);
+                        console.error('Error message:', error.message);
+                        
+                        // Provide specific guidance based on error type
+                        if (error.code === 'storage/unauthorized') {
+                            console.log('Firebase Storage rules are blocking the upload.');
+                            console.log('Update your Firebase Storage rules to allow uploads:');
+                            console.log('rules_version = "2";');
+                            console.log('service firebase.storage {');
+                            console.log('  match /b/{bucket}/o {');
+                            console.log('    match /temp/{allPaths=**} {');
+                            console.log('      allow read, write: if true;');
+                            console.log('    }');
+                            console.log('  }');
+                            console.log('}');
+                        } else if (error.code === 'storage/unauthenticated') {
+                            console.log('Authentication is required but not configured.');
+                            console.log('Enable anonymous uploads in Firebase Storage rules.');
+                        } else if (error.message && error.message.includes('CORS')) {
+                            console.log('CORS error detected. See instructions below.');
+                        }
+                        
                         reject(error);
                     });
             } catch (error) {

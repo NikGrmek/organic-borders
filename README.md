@@ -4,11 +4,12 @@ A web-based application for automatically generating polygon borders around imag
 
 ## Features
 
-- Upload any PNG image
-- Automatically detect edges
-- Customize border thickness, color, and style
-- Apply black & white filters and image adjustments
+- Upload PNG or PSD images via drag-and-drop or file selection
+- Automatically detect edges and generate organic borders
+- Customize border thickness and shape simplification
+- Edge selection mode for custom border shapes
 - Export as PNG or PSD with separate layers
+- Drag-and-drop PSD URLs (with Firebase integration)
 - Integration with Eagle App for direct library imports
 - Responsive design works on any device
 
@@ -64,5 +65,12 @@ The `config.js` file is ignored by git (listed in `.gitignore`), so your API tok
 ## Configuration
 
 1. Copy `config.sample.js` to `config.js`
-2. Replace the placeholder Hugging Face token in `config.js` with your own token
-3. Make sure not to commit your `config.js` file to version control 
+2. Update the Eagle API token if you want Eagle App integration
+3. Firebase configuration is already included for PSD drag-and-drop functionality
+4. Make sure not to commit your `config.js` file to version control
+
+### Firebase Setup for GitHub Pages
+
+If you're hosting this app on GitHub Pages, Firebase Storage uploads may not work due to CORS restrictions. See [FIREBASE_GITHUB_PAGES_SETUP.md](FIREBASE_GITHUB_PAGES_SETUP.md) for detailed setup instructions.
+
+**Note:** The app will still work without Firebase - you can download PSD files locally. Firebase is only needed for the drag-and-drop URL feature. 
