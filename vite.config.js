@@ -1,9 +1,14 @@
 export default {
-  root: 'src',
-  publicDir: '../public',
+  root: '.',
+  publicDir: 'assets',
   build: {
-    outDir: '../dist',
-    emptyOutDir: true
+    outDir: 'dist',
+    emptyOutDir: true,
+    rollupOptions: {
+      input: {
+        main: 'index.html'
+      }
+    }
   },
   server: {
     open: true

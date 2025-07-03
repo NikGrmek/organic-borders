@@ -7,7 +7,20 @@ fetch('config.js')
         eval(configText);
     })
     .catch(error => {
-        console.error("Error loading configuration:", error);
+        console.warn("Config file not found, using defaults:", error);
+        // Fallback configuration for production builds
+        window.eagleConfig = {
+            apiToken: 'YOUR_EAGLE_API_TOKEN_HERE'
+        };
+        window.firebaseConfig = {
+            apiKey: "AIzaSyBWssGMXhlpDbvorHkTsIeWRR7DH3ZardU",
+            authDomain: "epiforms-ab448.firebaseapp.com",
+            projectId: "epiforms-ab448",
+            storageBucket: "epiforms-ab448.firebasestorage.app",
+            messagingSenderId: "1074564087361",
+            appId: "1:1074564087361:web:d937abec49f0ccde65d0c0",
+            measurementId: "G-SE00BKNMCC"
+        };
     });
 
 
