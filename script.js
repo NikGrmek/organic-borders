@@ -4037,18 +4037,12 @@ document.addEventListener('DOMContentLoaded', () => {
         // Hide render button immediately
         renderBtn.style.display = 'none';
         
-        // Show a processing message
-        showProcessingMessage('Rendering...');
-        
         try {
             // Generate the border
             generateBorder();
             
             // Generate the PSD in the background
             await generatePsdForRender();
-            
-            // Hide processing message
-            hideProcessingMessage();
             
             // Show export buttons
             downloadBtn.style.display = 'inline-flex';
@@ -4057,7 +4051,6 @@ document.addEventListener('DOMContentLoaded', () => {
             
         } catch (error) {
             console.error('Error during render:', error);
-            hideProcessingMessage();
             alert('Error during rendering. Please try again.');
             
             // Show render button again on error
