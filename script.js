@@ -175,6 +175,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize Firebase when available
     if (window.initializeFirebase) {
         window.initializeFirebase();
+        
+        // Clean up old temp files on startup (with a small delay to ensure Firebase is ready)
+        setTimeout(() => {
+            cleanupOldTempFiles();
+        }, 2000);
     }
     
     // Add CSS for processing message
@@ -3969,6 +3974,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 console.log('Uploading PSD to Firebase:', uniqueFileName);
                 
+                // Clean up old files before uploading new one
+                cleanupOldTempFiles().catch(error => {
+                    console.warn('Cleanup failed, but continuing with upload:', error);
+                });
+                
                 // Upload the blob
                 window.firebaseUploadBytes(storageRef, blob)
                     .then((snapshot) => {
@@ -4009,6 +4019,52 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log('Temporary PSD file deleted from Firebase:', path);
         } catch (error) {
             console.error('Error deleting PSD from Firebase:', error);
+        }
+    }
+    
+    // Function to clean up old files from Firebase Storage temp folder
+    async function cleanupOldTempFiles() {
+        if (!window.firebaseStorage || !window.firebaseRef || !window.firebaseListAll || !window.firebaseGetMetadata || !window.firebaseDeleteObject) {
+            console.warn('Firebase Storage functions not available for cleanup');
+            return;
+        }
+        
+        try {
+            const tempFolderRef = window.firebaseRef(window.firebaseStorage, 'temp');
+            const listResult = await window.firebaseListAll(tempFolderRef);
+            
+            const now = Date.now();
+            const twentyFourHours = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+            let deletedCount = 0;
+            
+            console.log(`Checking ${listResult.items.length} files in temp folder for cleanup...`);
+            
+            // Check each file in the temp folder
+            for (const itemRef of listResult.items) {
+                try {
+                    const metadata = await window.firebaseGetMetadata(itemRef);
+                    const uploadTime = new Date(metadata.timeCreated).getTime();
+                    const age = now - uploadTime;
+                    
+                    // If file is older than 24 hours, delete it
+                    if (age > twentyFourHours) {
+                        await window.firebaseDeleteObject(itemRef);
+                        console.log(`Deleted old temp file: ${itemRef.name} (${Math.round(age / (60 * 60 * 1000))} hours old)`);
+                        deletedCount++;
+                    }
+                } catch (error) {
+                    console.error(`Error processing file ${itemRef.name}:`, error);
+                }
+            }
+            
+            if (deletedCount > 0) {
+                console.log(`Cleanup complete: deleted ${deletedCount} old temp files`);
+            } else {
+                console.log('No old temp files found to delete');
+            }
+            
+        } catch (error) {
+            console.error('Error during temp folder cleanup:', error);
         }
     }
     

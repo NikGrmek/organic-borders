@@ -149,7 +149,7 @@
     <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
+        import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject, listAll, getMetadata } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
         
         // Initialize Firebase when config is available
         window.initializeFirebase = function() {
@@ -163,6 +163,8 @@
                 window.firebaseUploadBytes = uploadBytes;
                 window.firebaseGetDownloadURL = getDownloadURL;
                 window.firebaseDeleteObject = deleteObject;
+                window.firebaseListAll = listAll;
+                window.firebaseGetMetadata = getMetadata;
                 
                 console.log('Firebase initialized successfully');
             }
