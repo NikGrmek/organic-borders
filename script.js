@@ -237,7 +237,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let controlPointsCanvas;
     const renderBtn = document.getElementById('renderBtn');
     const renderBtnText = document.getElementById('renderBtnText');
-    const renderIcon = document.getElementById('renderIcon');
     const downloadBtn = document.getElementById('downloadBtn');
     const exportPsdBtn = document.getElementById('exportPsdBtn');
     const dragPsdBtn = document.getElementById('dragPsdBtn');
@@ -4025,8 +4024,6 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Show render button
             renderBtn.style.display = 'inline-flex';
-            renderBtn.classList.remove('rendering');
-            renderBtnText.textContent = 'Render';
         }
     }
     
@@ -4037,24 +4034,21 @@ document.addEventListener('DOMContentLoaded', () => {
         isRendering = true;
         needsRender = false;
         
-        // Update button state
-        renderBtn.classList.add('rendering');
-        renderBtnText.textContent = 'Rendering...';
-        renderBtn.disabled = true;
+        // Hide render button immediately
+        renderBtn.style.display = 'none';
+        
+        // Show a processing message
+        showProcessingMessage('Rendering...');
         
         try {
-            // Simulate rendering process (in reality, this would be your actual rendering logic)
-            // For now, we'll just generate the border and prepare for export
+            // Generate the border
             generateBorder();
             
             // Generate the PSD in the background
             await generatePsdForRender();
             
-            // Hide render button
-            renderBtn.style.display = 'none';
-            renderBtn.classList.remove('rendering');
-            renderBtn.disabled = false;
-            renderBtnText.textContent = 'Render';
+            // Hide processing message
+            hideProcessingMessage();
             
             // Show export buttons
             downloadBtn.style.display = 'inline-flex';
@@ -4063,12 +4057,11 @@ document.addEventListener('DOMContentLoaded', () => {
             
         } catch (error) {
             console.error('Error during render:', error);
+            hideProcessingMessage();
             alert('Error during rendering. Please try again.');
             
-            // Reset state
-            renderBtn.classList.remove('rendering');
-            renderBtn.disabled = false;
-            renderBtnText.textContent = 'Render';
+            // Show render button again on error
+            renderBtn.style.display = 'inline-flex';
             needsRender = true;
         } finally {
             isRendering = false;

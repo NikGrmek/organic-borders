@@ -812,29 +812,4 @@ input[type="checkbox"] {
     height: 20px;
 }
 
-/* Render button styles */
-.render-btn {
-    background-color: #000000 !important;
-    color: white !important;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    min-width: 120px;
-}
-
-.render-btn:hover {
-    background-color: #1a1a1a !important;
-}
-
-.render-btn.rendering {
-    background-color: #333333 !important;
-    cursor: not-allowed;
-    opacity: 0.8;
-}
-
-.render-btn.rendering svg {
-    animation: spin 1s linear infinite;
-}
-
-.render-btn svg {
-    margin-right: 4px;
-}
+/* Render button styles - removed, now uses download-btn class */
