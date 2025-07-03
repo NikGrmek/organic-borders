@@ -54,7 +54,8 @@
 </head>
 <body>
     <h1>PSD Drop Test Page</h1>
-    <p>Drag the PSD file from your app to the drop zone below to see what data is received:</p>
+    <p><strong>Updated approach:</strong> The PSD file is now downloaded to your Downloads folder first, then the drag operation transfers that file.</p>
+    <p>Drag the purple "Drag PSD" button from your app to the drop zone below to see what data is received:</p>
     
     <div class="drop-zone" id="dropZone">
         <p>Drop your PSD file here</p>
@@ -171,100 +172,29 @@
                 const downloadURL = e.dataTransfer.getData('DownloadURL');
                 addDataItem('DownloadURL', downloadURL);
                 
-                // Extract the actual URL from the DownloadURL format
-                let actualUrl = downloadURL;
-                if (downloadURL.includes(':')) {
-                    const parts = downloadURL.split(':');
-                    actualUrl = parts[parts.length - 1];
-                }
-                
-                // Try to fetch the URL to verify it works
-                if (actualUrl) {
-                    addDataItem('Extracted URL', actualUrl);
+                // Try to fetch the URL if it's a blob
+                if (downloadURL.includes('blob:')) {
+                    const urlParts = downloadURL.split(':');
+                    const blobUrl = urlParts[urlParts.length - 1];
                     
-                    // Test if the URL is accessible
-                    fetch(actualUrl, { method: 'HEAD' })
-                        .then(response => {
-                            addDataItem('URL Response', {
-                                status: response.status,
-                                statusText: response.statusText,
-                                contentLength: response.headers.get('content-length') || 'unknown',
-                                contentType: response.headers.get('content-type') || 'unknown'
-                            });
-                            
-                            // If it's a Firebase URL, show Firebase info
-                            if (actualUrl.includes('firebasestorage.googleapis.com')) {
-                                addDataItem('Firebase Storage', 'URL is from Firebase Storage ✓');
-                                
-                                // Create download link for testing
-                                const downloadLink = document.createElement('a');
-                                downloadLink.href = actualUrl;
-                                downloadLink.download = 'test-download.psd';
-                                downloadLink.textContent = 'Test Download Link';
-                                downloadLink.style.cssText = 'display: block; margin: 10px 0; padding: 5px; background: #007bff; color: white; text-decoration: none; border-radius: 3px; text-align: center;';
-                                
-                                const linkItem = document.createElement('div');
-                                linkItem.className = 'data-item';
-                                linkItem.innerHTML = '<div class="data-type">Test Download</div>';
-                                linkItem.appendChild(downloadLink);
-                                output.appendChild(linkItem);
-                            }
-                        })
-                        .catch(error => {
-                            addDataItem('URL Test', 'Error: ' + error.message);
-                        });
-                }
-            }
-            
-            // Check for URI list (common for URL drag and drop)
-            if (types.includes('text/uri-list')) {
-                const uriList = e.dataTransfer.getData('text/uri-list');
-                addDataItem('URI List', uriList);
-                
-                // Test the URI if it looks like a URL
-                if (uriList.startsWith('http')) {
-                    addDataItem('URI Test', 'Testing URI accessibility...');
-                    
-                    fetch(uriList, { method: 'HEAD' })
-                        .then(response => {
-                            addDataItem('URI Response', {
-                                status: response.status,
-                                url: uriList,
-                                contentLength: response.headers.get('content-length') || 'unknown'
+                    fetch(blobUrl)
+                        .then(response => response.blob())
+                        .then(blob => {
+                            addDataItem('Blob from DownloadURL', {
+                                size: blob.size + ' bytes',
+                                type: blob.type
                             });
                         })
                         .catch(error => {
-                            addDataItem('URI Test Error', error.message);
+                            addDataItem('Blob from DownloadURL', 'Error: ' + error.message);
                         });
                 }
-            }
-            
-            // Check for Mozilla URL format
-            if (types.includes('text/x-moz-url')) {
-                const mozUrl = e.dataTransfer.getData('text/x-moz-url');
-                addDataItem('Mozilla URL', mozUrl);
             }
             
             // Check for plain text
             if (types.includes('text/plain')) {
                 const plainText = e.dataTransfer.getData('text/plain');
                 addDataItem('Plain Text', plainText);
-                
-                // If plain text looks like a URL, test it
-                if (plainText.startsWith('http')) {
-                    addDataItem('Plain Text URL Test', 'Testing URL from plain text...');
-                    
-                    fetch(plainText, { method: 'HEAD' })
-                        .then(response => {
-                            addDataItem('Plain Text URL Response', {
-                                status: response.status,
-                                url: plainText
-                            });
-                        })
-                        .catch(error => {
-                            addDataItem('Plain Text URL Error', error.message);
-                        });
-                }
             }
             
             // Check for custom URL

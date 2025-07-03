@@ -162,147 +162,11 @@ async function removeBackground(imageFile) {
 // We've removed the urlToDownloadableBlob function as it's no longer needed.
 // The removeBackground function now directly returns a blob URL.
 
-// Firebase configuration (disabled - using local methods for faster drag-and-drop)
-// const firebaseConfig = {
-//     apiKey: "AIzaSyBWssGMXhlpDbvorHkTsIeWRR7DH3ZardU",
-//     authDomain: "epiforms-ab448.firebaseapp.com",
-//     projectId: "epiforms-ab448",
-//     storageBucket: "epiforms-ab448.firebasestorage.app",
-//     messagingSenderId: "1074564087361",
-//     appId: "1:1074564087361:web:d937abec49f0ccde65d0c0",
-//     measurementId: "G-SE00BKNMCC"
-// };
-
-// Initialize Firebase (disabled)
-// let firebaseApp = null;
-// let storage = null;
-
-// try {
-//     firebaseApp = firebase.initializeApp(firebaseConfig);
-//     storage = firebase.storage();
-//     console.log('Firebase initialized successfully');
-// } catch (error) {
-//     console.error('Error initializing Firebase:', error);
-// }
-
-// Local PSD preparation functions for drag-and-drop
-async function preparePsdForDrag(blob, fileName) {
-    const fileSizeMB = blob.size / (1024 * 1024);
-    console.log(`Preparing PSD for drag: ${fileName} (${fileSizeMB.toFixed(2)} MB)`);
-    
-    // Method 1: Data URL for smaller files (< 2MB) - Instant!
-    if (fileSizeMB < 2) {
-        try {
-            const dataURL = await blobToDataURL(blob);
-            console.log('Using Data URL method (fastest)');
-            return {
-                method: 'Data',
-                url: dataURL,
-                type: 'dataurl'
-            };
-        } catch (error) {
-            console.warn('Data URL method failed:', error);
-        }
-    }
-    
-    // Method 2: File System Access API for larger files
-    if ('showSaveFilePicker' in window) {
-        try {
-            const result = await writeToTempFile(blob, fileName);
-            console.log('Using File System API method');
-            return {
-                method: 'File',
-                filePath: result.filePath,
-                fileHandle: result.fileHandle,
-                type: 'file'
-            };
-        } catch (error) {
-            console.warn('File System API method failed:', error);
-        }
-    }
-    
-    // Method 3: Enhanced Blob URL (fallback)
-    try {
-        const blobURL = URL.createObjectURL(blob);
-        console.log('Using Enhanced Blob URL method');
-        return {
-            method: 'Blob',
-            url: blobURL,
-            type: 'blob'
-        };
-    } catch (error) {
-        console.error('All methods failed:', error);
-        throw new Error('Could not prepare PSD for drag-and-drop');
-    }
-}
-
-async function blobToDataURL(blob) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-    });
-}
-
-async function writeToTempFile(blob, fileName) {
-    // Note: This approach requires user interaction (save dialog)
-    // For a truly automatic experience, we'd need a different approach
-    
-    try {
-        // Skip File System API for now to avoid user prompts
-        // In the future, we could use the Origin Private File System API
-        // or implement a more seamless file handling approach
-        
-        throw new Error('File System API approach disabled to avoid user prompts');
-        
-        // Commented out for now:
-        // const fileHandle = await window.showSaveFilePicker({
-        //     suggestedName: fileName,
-        //     types: [{
-        //         description: 'PSD files',
-        //         accept: { 'image/vnd.adobe.photoshop': ['.psd'] }
-        //     }]
-        // });
-        
-        // const writable = await fileHandle.createWritable();
-        // await writable.write(blob);
-        // await writable.close();
-        
-        // const file = await fileHandle.getFile();
-        
-        // return {
-        //     fileHandle: fileHandle,
-        //     filePath: file.name,
-        //     file: file
-        // };
-        
-    } catch (error) {
-        throw new Error(`File write failed: ${error.message}`);
-    }
-}
-
-async function cleanupTempData(dragData) {
-    if (!dragData) return;
-    
-    try {
-        if (dragData.type === 'blob' && dragData.url) {
-            URL.revokeObjectURL(dragData.url);
-            console.log('Cleaned up blob URL');
-        }
-        // File system files are managed by the OS, no cleanup needed
-        // Data URLs are garbage collected automatically
-    } catch (error) {
-        console.warn('Error during cleanup:', error);
-    }
-}
-
 document.addEventListener('DOMContentLoaded', () => {
     // Global variables 
     let lastCreatedPsdData = null; // Store the last created PSD data for direct opening
     let currentPsdBlob = null; // Store the current PSD blob for drag-and-drop
     let currentPsdFileName = null; // Store the current PSD file name
-    let currentDragData = null; // Store the current drag data (Data URL, File path, or Blob URL)
     
     // Add CSS for processing message
     const style = document.createElement('style');
@@ -680,21 +544,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Reset drag button state when loading new image
                 currentPsdBlob = null;
                 currentPsdFileName = null;
-                
-                // Clean up previous drag data if it exists
-                if (currentDragData) {
-                    cleanupTempData(currentDragData)
-                        .catch(error => console.warn('Error cleaning up previous drag data:', error));
-                    currentDragData = null;
-                }
-                
                 dragPsdBtn.style.display = 'none';
-                
-                // Reset button text
-                const buttonText = dragPsdBtn.querySelector('svg').nextSibling;
-                if (buttonText && buttonText.nodeType === Node.TEXT_NODE) {
-                    buttonText.textContent = ' Drag PSD';
-                }
                 
                 // Re-enable the Remove Background button when a new image is loaded
                 if (removeBackgroundBtn) {
@@ -2000,42 +1850,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 annotation: "Generated with Auto Borders Tool"
             };
             
-            // Store the blob and filename for drag-and-drop
+            // Download the PSD file first
+            downloadAsPSD(blob, fileName);
+            
+            // Store the blob and filename for drag-and-drop (after download)
             currentPsdBlob = blob;
             currentPsdFileName = fileName;
             
-            // Prepare PSD for drag-and-drop using local methods
-            preparePsdForDrag(blob, fileName)
-                .then(result => {
-                    console.log('PSD prepared for drag-and-drop:', result.method, result.url ? result.url.substring(0, 100) + '...' : 'File ready');
-                    
-                    // Store the drag data for the drag handler
-                    currentDragData = result;
-                    
-                    // Show the drag button now that preparation is complete
-                    dragPsdBtn.style.display = 'inline-flex';
-                    
-                    // Update button text to indicate the method used
-                    const buttonText = dragPsdBtn.querySelector('svg').nextSibling;
-                    if (buttonText && buttonText.nodeType === Node.TEXT_NODE) {
-                        buttonText.textContent = ` Drag PSD (${result.method})`;
-                    }
-                })
-                .catch(error => {
-                    console.error('Failed to prepare PSD for drag:', error);
-                    
-                    // Show the drag button anyway for basic drag functionality
-                    dragPsdBtn.style.display = 'inline-flex';
-                    
-                    // Update button text to indicate fallback mode
-                    const buttonText = dragPsdBtn.querySelector('svg').nextSibling;
-                    if (buttonText && buttonText.nodeType === Node.TEXT_NODE) {
-                        buttonText.textContent = ' Drag PSD (Basic)';
-                    }
-                });
-            
-            // Download the PSD file
-            downloadAsPSD(blob, fileName);
+            // Show the drag button and file info after download
+            setTimeout(() => {
+                dragPsdBtn.style.display = 'inline-flex';
+                showDownloadedFileInfo(fileName);
+            }, 100);
         } catch (error) {
             console.error('Error creating PSD:', error);
             alert('Failed to create PSD file: ' + error.message);
@@ -3983,14 +3809,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // Handle PSD drag start
-    function handlePsdDragStart(e) {
+    async function handlePsdDragStart(e) {
         if (!currentPsdBlob || !currentPsdFileName) {
             console.error('No PSD data available for drag');
             e.preventDefault();
             return;
         }
         
-        console.log('Starting drag with PSD:', currentPsdFileName);
+        // Verify the blob has data
+        if (currentPsdBlob.size === 0) {
+            console.error('PSD blob is empty');
+            e.preventDefault();
+            return;
+        }
+        
+        console.log('Starting drag with downloaded PSD:', currentPsdFileName, 'Size:', currentPsdBlob.size, 'bytes');
         
         // Add dragging class for visual feedback
         dragPsdBtn.classList.add('dragging');
@@ -4004,7 +3837,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <path d="M14 2V8H20" fill="currentColor"/>
                 <text x="12" y="16" text-anchor="middle" fill="white" font-size="8" font-weight="bold">PSD</text>
             </svg>
-            ${currentPsdFileName}
+            📄 ${currentPsdFileName}
         `;
         document.body.appendChild(dragImage);
         
@@ -4018,96 +3851,216 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }, 0);
         
-        // Set the effect to allow copying
-        e.dataTransfer.effectAllowed = 'copy';
+        // Set the effect to allow copying and moving
+        e.dataTransfer.effectAllowed = 'copyMove';
         
         try {
             // Clear any existing data first
             e.dataTransfer.clearData();
             
-            if (!currentDragData) {
-                console.warn('No drag data available, using basic blob URL');
-                const blobUrl = URL.createObjectURL(currentPsdBlob);
-                e.dataTransfer.setData('text/plain', blobUrl);
-                setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
-                return;
+            // Create a File object that represents the downloaded file
+            const file = new File([currentPsdBlob], currentPsdFileName, { 
+                type: 'image/vnd.adobe.photoshop',
+                lastModified: Date.now()
+            });
+            
+            console.log('Created file object for downloaded PSD:', file);
+            
+            // Method 1: Try to use File System Access API if available (Chrome/Edge)
+            if ('showSaveFilePicker' in window) {
+                console.log('File System Access API available - using enhanced file transfer');
+                
+                // Add the file via DataTransferItemList
+                if (e.dataTransfer.items && e.dataTransfer.items.add) {
+                    try {
+                        const item = e.dataTransfer.items.add(file);
+                        console.log('Added file via File System Access API:', item);
+                    } catch (error) {
+                        console.warn('File System Access API failed:', error);
+                    }
+                }
+            } else {
+                console.log('File System Access API not available - using fallback methods');
             }
             
-            console.log('Setting drag data using method:', currentDragData.method);
-            
-            // Handle different drag data types
-            switch (currentDragData.type) {
-                case 'dataurl':
-                    // Data URL method - works great for smaller files
-                    e.dataTransfer.setData('DownloadURL', `image/vnd.adobe.photoshop:${currentPsdFileName}:${currentDragData.url}`);
-                    e.dataTransfer.setData('text/uri-list', currentDragData.url);
-                    e.dataTransfer.setData('text/plain', currentDragData.url);
-                    e.dataTransfer.setData('text/x-moz-url', `${currentDragData.url}\n${currentPsdFileName}`);
-                    console.log('Using Data URL for drag (fastest method)');
-                    break;
-                    
-                case 'file':
-                    // File System API method - creates real file that can be dragged
-                    if (currentDragData.fileHandle) {
-                        // Try to get the file and create a file object
-                        try {
-                            const file = new File([currentPsdBlob], currentPsdFileName, { 
-                                type: 'image/vnd.adobe.photoshop',
-                                lastModified: Date.now()
-                            });
-                            e.dataTransfer.items.add(file);
-                            console.log('Added file object from File System API');
-                        } catch (fileError) {
-                            console.warn('Could not add file object:', fileError);
-                        }
-                    }
-                    
-                    // Also set as text for compatibility
-                    e.dataTransfer.setData('text/plain', currentDragData.filePath || currentPsdFileName);
-                    e.dataTransfer.setData('text/x-filename', currentPsdFileName);
-                    break;
-                    
-                case 'blob':
-                default:
-                    // Blob URL method - enhanced version
-                    e.dataTransfer.setData('DownloadURL', `image/vnd.adobe.photoshop:${currentPsdFileName}:${currentDragData.url}`);
-                    e.dataTransfer.setData('text/uri-list', currentDragData.url);
-                    e.dataTransfer.setData('text/plain', currentDragData.url);
-                    e.dataTransfer.setData('text/x-moz-url', `${currentDragData.url}\n${currentPsdFileName}`);
-                    
-                    // Try to add file object for apps that support it
-                    if (e.dataTransfer.items && e.dataTransfer.items.add) {
-                        try {
-                            const file = new File([currentPsdBlob], currentPsdFileName, { 
-                                type: 'image/vnd.adobe.photoshop',
-                                lastModified: Date.now()
-                            });
-                            e.dataTransfer.items.add(file);
-                            console.log('Added file object with blob URL');
-                        } catch (fileError) {
-                            console.warn('Could not add file object:', fileError);
-                        }
-                    }
-                    break;
+            // Method 2: Standard File API approach
+            if (e.dataTransfer.items && e.dataTransfer.items.add) {
+                try {
+                    const item = e.dataTransfer.items.add(file);
+                    console.log('Added file via standard File API:', item);
+                } catch (fileError) {
+                    console.warn('Standard File API failed:', fileError);
+                }
             }
             
-            // Set additional formats for maximum compatibility
-            e.dataTransfer.setData('application/x-photoshop', currentDragData.url || currentPsdFileName);
-            e.dataTransfer.setData('application/octet-stream', currentDragData.url || currentPsdFileName);
-            e.dataTransfer.setData('text/x-filename', currentPsdFileName);
+            // Method 3: Create blob URL for DownloadURL approach
+            const blobUrl = URL.createObjectURL(currentPsdBlob);
             
-            console.log('Drag data setup complete. Available types:', e.dataTransfer.types);
+            // Set DownloadURL in proper format for file managers
+            const downloadUrl = `image/vnd.adobe.photoshop:${currentPsdFileName}:${blobUrl}`;
+            e.dataTransfer.setData('DownloadURL', downloadUrl);
+            console.log('Set DownloadURL:', downloadUrl);
+            
+            // Method 4: Set file path hint for applications that support it
+            const downloadsPath = getDownloadsPath();
+            if (downloadsPath) {
+                const filePath = `${downloadsPath}/${currentPsdFileName}`;
+                e.dataTransfer.setData('text/uri-list', `file://${filePath}`);
+                e.dataTransfer.setData('text/x-moz-url', `file://${filePath}\n${currentPsdFileName}`);
+                console.log('Set file path hint:', filePath);
+            }
+            
+            // Method 5: Set additional MIME types and formats
+            e.dataTransfer.setData('application/octet-stream', blobUrl);
+            e.dataTransfer.setData('application/x-photoshop', blobUrl);
+            e.dataTransfer.setData('Files', ''); // Indicate we have files
+            
+            // Store blob URL for cleanup and potential access
+            e.dataTransfer.setData('text/x-psd-url', blobUrl);
+            
+            // Set plain text as final fallback
+            e.dataTransfer.setData('text/plain', currentPsdFileName);
+            
+            // Clean up the URL after drag completes
+            setTimeout(() => {
+                URL.revokeObjectURL(blobUrl);
+            }, 15000);
+            
+            console.log('Drag setup complete for downloaded file. Available types:', Array.from(e.dataTransfer.types));
             
         } catch (error) {
-            console.error('Error setting drag data:', error);
+            console.error('Error setting up drag for downloaded file:', error);
             // Fallback: just set the filename as text
             e.dataTransfer.setData('text/plain', currentPsdFileName);
         }
+    }
+    
+    // Helper function to get Downloads path based on platform
+    function getDownloadsPath() {
+        try {
+            // Try to determine the Downloads folder path
+            const platform = navigator.platform.toLowerCase();
+            const userAgent = navigator.userAgent.toLowerCase();
+            
+            if (platform.includes('mac')) {
+                return `/Users/${getUserName()}/Downloads`;
+            } else if (platform.includes('win')) {
+                return `C:\\Users\\${getUserName()}\\Downloads`;
+            } else if (platform.includes('linux')) {
+                return `/home/${getUserName()}/Downloads`;
+            }
+        } catch (error) {
+            console.warn('Could not determine Downloads path:', error);
+        }
+        return null;
     }
     
     // Handle PSD drag end
     function handlePsdDragEnd(e) {
         // Remove dragging class
         dragPsdBtn.classList.remove('dragging');
+    }
+    
+    // Show information about the downloaded file
+    function showDownloadedFileInfo(fileName) {
+        // Update the drag button tooltip
+        dragPsdBtn.title = `Drag ${fileName} to another app (File saved to Downloads)`;
+        
+        // Create a subtle notification that the file was saved
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed;
+            top: 60px;
+            right: 20px;
+            background: #4CAF50;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 10000;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            max-width: 400px;
+            opacity: 0;
+            transform: translateX(100%);
+            transition: all 0.3s ease;
+        `;
+        
+        notification.innerHTML = `
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" fill="currentColor"/>
+            </svg>
+            <div>
+                <div style="font-weight: 600;">PSD saved to Downloads</div>
+                <div style="font-size: 12px; opacity: 0.9;">You can now drag the purple button to other apps</div>
+            </div>
+            <button style="background: none; border: none; color: white; font-size: 18px; cursor: pointer; padding: 4px;" onclick="this.parentElement.remove()">×</button>
+        `;
+        
+        document.body.appendChild(notification);
+        
+        // Animate in
+        setTimeout(() => {
+            notification.style.opacity = '1';
+            notification.style.transform = 'translateX(0)';
+        }, 10);
+        
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            if (document.body.contains(notification)) {
+                notification.style.opacity = '0';
+                notification.style.transform = 'translateX(100%)';
+                setTimeout(() => {
+                    if (document.body.contains(notification)) {
+                        notification.remove();
+                    }
+                }, 300);
+            }
+        }, 5000);
+        
+        // Add click handler to open Downloads folder (if supported)
+        notification.addEventListener('click', (e) => {
+            if (e.target.tagName !== 'BUTTON') {
+                openDownloadsFolder();
+            }
+        });
+    }
+    
+    // Function to try opening Downloads folder
+    function openDownloadsFolder() {
+        try {
+            // For desktop apps that support it
+            if (window.electronAPI && window.electronAPI.openDownloadsFolder) {
+                window.electronAPI.openDownloadsFolder();
+                return;
+            }
+            
+            // For web browsers - try to open Downloads URL
+            const platform = navigator.platform.toLowerCase();
+            
+            if (platform.includes('mac')) {
+                // Try to open Downloads folder on macOS
+                window.open('file:///Users/' + getUserName() + '/Downloads');
+            } else if (platform.includes('win')) {
+                // Windows - this won't work from web browser due to security
+                console.log('To access the downloaded file: Press Ctrl+J to open Downloads in your browser, or open File Explorer and go to Downloads folder');
+            } else {
+                // Linux and others
+                console.log('PSD file saved to Downloads folder');
+            }
+            
+            // Fallback: Show browser downloads
+            console.log('Opening browser downloads...');
+            // Most browsers use Ctrl+Shift+Y or Ctrl+J
+            const shortcut = navigator.userAgent.includes('Chrome') ? 'Ctrl+J' : 
+                           navigator.userAgent.includes('Firefox') ? 'Ctrl+Shift+Y' : 'Ctrl+J';
+            
+            console.log(`You can also press ${shortcut} to open your browser's Downloads page`);
+            
+        } catch (error) {
+            console.log('Could not open Downloads folder automatically. Please check your Downloads folder for the PSD file.');
+        }
     }
 }); 
