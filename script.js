@@ -169,6 +169,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentPsdFileName = null; // Store the current PSD file name
     let currentPsdFirebaseUrl = null; // Store the Firebase URL for dragging
     let currentPsdFirebasePath = null; // Store the Firebase path for cleanup
+    let needsRender = false; // Track if we need to render before export
+    let isRendering = false; // Track if currently rendering
     
     // Initialize Firebase when available
     if (window.initializeFirebase) {
@@ -234,9 +236,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Add a dedicated canvas for control points that will sit on top
     let controlPointsCanvas;
     const renderBtn = document.getElementById('renderBtn');
-    const renderIcon = document.getElementById('renderIcon');
-    const renderSpinner = document.getElementById('renderSpinner');
     const renderBtnText = document.getElementById('renderBtnText');
+    const renderIcon = document.getElementById('renderIcon');
     const downloadBtn = document.getElementById('downloadBtn');
     const exportPsdBtn = document.getElementById('exportPsdBtn');
     const dragPsdBtn = document.getElementById('dragPsdBtn');
@@ -346,7 +347,7 @@ document.addEventListener('DOMContentLoaded', () => {
         currentThickness = parseInt(e.target.value);
         thicknessValue.textContent = currentThickness;
         generateBorder();
-        showRenderButton(); // Show render button when changes are made
+        markNeedsRender();
     });
     
     // Edge selection mode
@@ -378,7 +379,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Regenerate border with control points if in selection mode
         generateBorder();
-        showRenderButton(); // Show render button when changes are made
+        markNeedsRender();
     });
     
     // Prevent default drag behavior
@@ -422,14 +423,14 @@ document.addEventListener('DOMContentLoaded', () => {
     simplificationRange.addEventListener('input', (e) => {
         simplificationValue.textContent = e.target.value;
         generateBorder();
-        showRenderButton(); // Show render button when changes are made
+        markNeedsRender();
     });
     
     // Black and white filter controls
     if (blackAndWhiteFilterCheckbox) {
         blackAndWhiteFilterCheckbox.addEventListener('change', () => {
             applyImageFilters();
-            showRenderButton(); // Show render button when changes are made
+            markNeedsRender();
         });
     }
     
@@ -438,7 +439,7 @@ document.addEventListener('DOMContentLoaded', () => {
         shadowSizeRange.addEventListener('input', (e) => {
             shadowSizeValue.textContent = e.target.value;
             applyImageFilters();
-            showRenderButton(); // Show render button when changes are made
+            markNeedsRender();
         });
     }
     
@@ -447,7 +448,7 @@ document.addEventListener('DOMContentLoaded', () => {
         shadowOpacityRange.addEventListener('input', (e) => {
             shadowOpacityValue.textContent = e.target.value;
             applyImageFilters();
-            showRenderButton(); // Show render button when changes are made
+            markNeedsRender();
         });
     }
     toggleBWFilterControls();
@@ -555,18 +556,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     uploadPlaceholder.style.display = 'none';
                 }
                 
-                // Show all control panels but hide render button initially
+                // Show all control panels
                 toolsContainer.style.display = 'block';
-                renderBtn.style.display = 'none'; // Hide render button until changes are made
                 removeBackgroundBtn.style.display = 'block';
                 
-                // Hide download buttons until render is complete
+                // Show render button, hide export buttons
+                renderBtn.style.display = 'inline-flex';
                 downloadBtn.style.display = 'none';
                 exportPsdBtn.style.display = 'none';
                 dragPsdBtn.style.display = 'none';
                 
-                // Reset render button state
-                resetRenderButton();
+                // Mark that we need to render
+                needsRender = true;
                 
                 // Reset drag button state when loading new image
                 currentPsdBlob = null;
@@ -1729,65 +1730,8 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Redraw border with updated selections
             generateBorder();
+            markNeedsRender();
         }
-    }
-    
-    // Handle render button click
-    function handleRender() {
-        if (!originalImage) return;
-        
-        // Set loading state
-        setRenderLoading(true);
-        
-        // Generate the border and process
-        generateBorder();
-        
-        // Export PSD automatically and show buttons when complete
-        exportAsPsdForRender();
-    }
-    
-    // Set render button loading state
-    function setRenderLoading(isLoading) {
-        if (isLoading) {
-            renderBtn.disabled = true;
-            renderIcon.style.display = 'none';
-            renderSpinner.style.display = 'block';
-            renderBtnText.textContent = 'Rendering...';
-        } else {
-            renderBtn.disabled = false;
-            renderIcon.style.display = 'block';
-            renderSpinner.style.display = 'none';
-            renderBtnText.textContent = 'Render';
-        }
-    }
-    
-    // Reset render button to default state
-    function resetRenderButton() {
-        setRenderLoading(false);
-        renderBtn.style.display = 'block';
-    }
-    
-    // Show all download buttons after successful render
-    function showDownloadButtons() {
-        renderBtn.style.display = 'none';
-        downloadBtn.style.display = 'block';
-        exportPsdBtn.style.display = 'block';
-        // dragPsdBtn will be shown by the PSD upload process
-    }
-    
-    // Hide download buttons and show render button when changes are made
-    function showRenderButton() {
-        downloadBtn.style.display = 'none';
-        exportPsdBtn.style.display = 'none';
-        dragPsdBtn.style.display = 'none';
-        renderBtn.style.display = 'block';
-        resetRenderButton();
-        
-        // Reset PSD data
-        currentPsdBlob = null;
-        currentPsdFileName = null;
-        currentPsdFirebaseUrl = null;
-        currentPsdFirebasePath = null;
     }
     
     function downloadResult() {
@@ -1955,9 +1899,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     currentPsdFirebasePath = uploadResult.path;
                     
                     // Update button to ready state
-                    dragPsdBtnText.textContent = 'Drag to AE';
+                    dragPsdBtnText.textContent = 'Drag URL';
                     dragPsdBtn.draggable = true;
-                    dragPsdBtn.title = 'Drag this URL to After Effects';
+                    dragPsdBtn.title = 'Drag this URL to another app';
                     
                     // Clean up after 1 hour (3600000 ms)
                     setTimeout(() => {
@@ -1984,183 +1928,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error('Error creating PSD:', error);
             alert('Failed to create PSD file: ' + error.message);
-            setRenderLoading(false); // Reset render button on error
-        }
-    }
-    
-    // Export PSD specifically for render button workflow
-    function exportAsPsdForRender() {
-        if (!originalImage) return;
-        
-        // Determine which version of the library to use
-        let psdLib;
-        if (typeof window.agPsdLibrary !== 'undefined') {
-            psdLib = window.agPsdLibrary;
-        } else if (typeof agPsd !== 'undefined') {
-            psdLib = agPsd;
-        } else {
-            console.error('Error: PSD library not loaded. Please refresh the page and try again.');
-            alert('Error: PSD library not loaded. Please refresh the page and try again.');
-            setRenderLoading(false);
-            return;
-        }
-        
-        // Create canvases for each layer
-        const imageLayer = document.createElement('canvas');
-        imageLayer.width = imageCanvas.width;
-        imageLayer.height = imageCanvas.height;
-        const imageLayerCtx = imageLayer.getContext('2d');
-        
-        const borderLayer = document.createElement('canvas');
-        borderLayer.width = borderCanvas.width;
-        borderLayer.height = borderCanvas.height;
-        const borderLayerCtx = borderLayer.getContext('2d');
-        
-        // Create original image layer (without filters and effects)
-        const originalImageLayer = document.createElement('canvas');
-        originalImageLayer.width = imageCanvas.width;
-        originalImageLayer.height = imageCanvas.height;
-        const originalImageLayerCtx = originalImageLayer.getContext('2d');
-        
-        // Draw image with all styling on the image layer
-        imageLayerCtx.drawImage(imageCanvas, 0, 0);
-        
-        // Draw just the border on the border layer
-        borderLayerCtx.drawImage(borderCanvas, 0, 0);
-        
-        // Draw the original image without any filters or effects on the original image layer
-        const padding = originalImage.padding || 0;
-        originalImageLayerCtx.drawImage(originalImage, padding, padding, originalImage.width, originalImage.height);
-        
-        // Create main composite canvas with all layers combined
-        const compositeCanvas = document.createElement('canvas');
-        compositeCanvas.width = imageCanvas.width;
-        compositeCanvas.height = imageCanvas.height;
-        const compositeCtx = compositeCanvas.getContext('2d');
-        compositeCtx.drawImage(borderCanvas, 0, 0);
-        compositeCtx.drawImage(imageCanvas, 0, 0);
-        
-        // Create PSD document with layers in proper order (original at top, but hidden)
-        const psd = {
-            width: imageCanvas.width,
-            height: imageCanvas.height,
-            children: [
-                {
-                    name: 'Border',
-                    canvas: borderLayer
-                },
-                {
-                    name: 'Image with styling',
-                    canvas: imageLayer
-                },
-                {
-                    name: 'Original image',
-                    canvas: originalImageLayer,
-                    hidden: true  // This layer will be hidden by default
-                }
-            ],
-            // Add the composite image as the main canvas
-            canvas: compositeCanvas
-        };
-        
-        try {
-            // Convert to PSD using ag-psd with thumbnail generation
-            console.log('Converting to PSD format...');
-            const psdBuffer = psdLib.writePsd(psd, { 
-                generateThumbnail: true,
-                psb: false,
-                imageResources: {
-                    resolutionInfo: {
-                        horizontalResolution: 72,
-                        horizontalResolutionUnit: "PPI",
-                        widthUnit: "Inches",
-                        verticalResolution: 72,
-                        verticalResolutionUnit: "PPI",
-                        heightUnit: "Inches"
-                    }
-                }
-            });
-            
-            console.log('PSD created successfully, size:', psdBuffer.byteLength, 'bytes');
-            
-            // Generate a unique filename
-            const timestamp = new Date().getTime();
-            const fileName = `polygon-border-${timestamp}.psd`;
-            
-            // Create a blob from the PSD buffer
-            const blob = new Blob([psdBuffer], { type: 'image/vnd.adobe.photoshop' });
-            
-            // Verify blob creation
-            console.log('PSD blob created:', fileName, 'Size:', blob.size, 'bytes');
-            
-            if (blob.size === 0) {
-                console.error('Warning: PSD blob is empty!');
-                alert('Error: Generated PSD file is empty. Please try again.');
-                setRenderLoading(false);
-                return;
-            }
-            
-            // Store the last created PSD data for direct opening
-            lastCreatedPsdData = {
-                buffer: psdBuffer,
-                fileName: fileName,
-                previewDataURL: compositeCanvas.toDataURL('image/png'),
-                tags: ['polygon-border', 'auto-border', 'generated', 'psd'],
-                annotation: "Generated with Auto Borders Tool"
-            };
-            
-            // Store the blob and filename for drag-and-drop
-            currentPsdBlob = blob;
-            currentPsdFileName = fileName;
-            
-            // Show the download buttons first
-            showDownloadButtons();
-            
-            // Show the drag button in uploading state
-            dragPsdBtn.style.display = 'inline-flex';
-            dragPsdBtnText.textContent = 'Uploading...';
-            dragPsdBtn.draggable = false;
-            
-            // Reset render button loading state
-            setRenderLoading(false);
-            
-            // Upload to Firebase and update button when ready
-            uploadPsdToFirebase(blob, fileName)
-                .then((uploadResult) => {
-                    console.log('PSD uploaded to Firebase for drag-and-drop:', uploadResult.url);
-                    currentPsdFirebaseUrl = uploadResult.url;
-                    currentPsdFirebasePath = uploadResult.path;
-                    
-                    // Update button to ready state
-                    dragPsdBtnText.textContent = 'Drag to AE';
-                    dragPsdBtn.draggable = true;
-                    dragPsdBtn.title = 'Drag this URL to After Effects';
-                    
-                    // Clean up after 1 hour (3600000 ms)
-                    setTimeout(() => {
-                        deletePsdFromFirebase(uploadResult.path);
-                        currentPsdFirebaseUrl = null;
-                        currentPsdFirebasePath = null;
-                        dragPsdBtnText.textContent = 'Drag PSD';
-                        dragPsdBtn.title = 'Drag this file to another app';
-                    }, 3600000);
-                })
-                .catch((error) => {
-                    console.error('Error uploading PSD to Firebase:', error);
-                    
-                    // Update button to fallback state
-                    dragPsdBtnText.textContent = 'Drag PSD';
-                    dragPsdBtn.draggable = true;
-                    dragPsdBtn.title = 'Drag this file to another app (using blob URL)';
-                    currentPsdFirebaseUrl = null;
-                    currentPsdFirebasePath = null;
-                });
-            
-            // Don't auto-download for render workflow
-        } catch (error) {
-            console.error('Error creating PSD:', error);
-            alert('Failed to create PSD file: ' + error.message);
-            setRenderLoading(false); // Reset render button on error
         }
     }
     
@@ -2416,6 +2183,7 @@ document.addEventListener('DOMContentLoaded', () => {
         thicknessValue.textContent = newValue;
         thicknessRange.value = newValue;
         generateBorder();
+        markNeedsRender();
     }
 
     // Function to add a file to Eagle library using the Eagle API
@@ -4035,6 +3803,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // Ensure dimensions are displayed after background removal
             displayImageDimensions();
             
+            // Mark that we need to render
+            markNeedsRender();
+            
             // Disable the Remove Background button after successful processing
             if (removeBackgroundBtn) {
                 removeBackgroundBtn.disabled = true;
@@ -4239,6 +4010,223 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log('Temporary PSD file deleted from Firebase:', path);
         } catch (error) {
             console.error('Error deleting PSD from Firebase:', error);
+        }
+    }
+    
+    // Function to mark that we need to render
+    function markNeedsRender() {
+        if (!needsRender && originalImage) {
+            needsRender = true;
+            
+            // Hide export buttons
+            downloadBtn.style.display = 'none';
+            exportPsdBtn.style.display = 'none';
+            dragPsdBtn.style.display = 'none';
+            
+            // Show render button
+            renderBtn.style.display = 'inline-flex';
+            renderBtn.classList.remove('rendering');
+            renderBtnText.textContent = 'Render';
+        }
+    }
+    
+    // Function to handle render button click
+    async function handleRender() {
+        if (isRendering || !needsRender) return;
+        
+        isRendering = true;
+        needsRender = false;
+        
+        // Update button state
+        renderBtn.classList.add('rendering');
+        renderBtnText.textContent = 'Rendering...';
+        renderBtn.disabled = true;
+        
+        try {
+            // Simulate rendering process (in reality, this would be your actual rendering logic)
+            // For now, we'll just generate the border and prepare for export
+            generateBorder();
+            
+            // Generate the PSD in the background
+            await generatePsdForRender();
+            
+            // Hide render button
+            renderBtn.style.display = 'none';
+            renderBtn.classList.remove('rendering');
+            renderBtn.disabled = false;
+            renderBtnText.textContent = 'Render';
+            
+            // Show export buttons
+            downloadBtn.style.display = 'inline-flex';
+            exportPsdBtn.style.display = 'inline-flex';
+            // Drag button will be shown after Firebase upload completes
+            
+        } catch (error) {
+            console.error('Error during render:', error);
+            alert('Error during rendering. Please try again.');
+            
+            // Reset state
+            renderBtn.classList.remove('rendering');
+            renderBtn.disabled = false;
+            renderBtnText.textContent = 'Render';
+            needsRender = true;
+        } finally {
+            isRendering = false;
+        }
+    }
+    
+    // Function to generate PSD during render (without downloading)
+    async function generatePsdForRender() {
+        if (!originalImage) return;
+        
+        // Determine which version of the library to use
+        let psdLib;
+        if (typeof window.agPsdLibrary !== 'undefined') {
+            psdLib = window.agPsdLibrary;
+        } else if (typeof agPsd !== 'undefined') {
+            psdLib = agPsd;
+        } else {
+            throw new Error('PSD library not loaded');
+        }
+        
+        // Create canvases for each layer
+        const imageLayer = document.createElement('canvas');
+        imageLayer.width = imageCanvas.width;
+        imageLayer.height = imageCanvas.height;
+        const imageLayerCtx = imageLayer.getContext('2d');
+        
+        const borderLayer = document.createElement('canvas');
+        borderLayer.width = borderCanvas.width;
+        borderLayer.height = borderCanvas.height;
+        const borderLayerCtx = borderLayer.getContext('2d');
+        
+        // Create original image layer (without filters and effects)
+        const originalImageLayer = document.createElement('canvas');
+        originalImageLayer.width = imageCanvas.width;
+        originalImageLayer.height = imageCanvas.height;
+        const originalImageLayerCtx = originalImageLayer.getContext('2d');
+        
+        // Draw image with all styling on the image layer
+        imageLayerCtx.drawImage(imageCanvas, 0, 0);
+        
+        // Draw just the border on the border layer
+        borderLayerCtx.drawImage(borderCanvas, 0, 0);
+        
+        // Draw the original image without any filters or effects on the original image layer
+        const padding = originalImage.padding || 0;
+        originalImageLayerCtx.drawImage(originalImage, padding, padding, originalImage.width, originalImage.height);
+        
+        // Create main composite canvas with all layers combined
+        const compositeCanvas = document.createElement('canvas');
+        compositeCanvas.width = imageCanvas.width;
+        compositeCanvas.height = imageCanvas.height;
+        const compositeCtx = compositeCanvas.getContext('2d');
+        compositeCtx.drawImage(borderCanvas, 0, 0);
+        compositeCtx.drawImage(imageCanvas, 0, 0);
+        
+        // Create PSD document with layers in proper order (original at top, but hidden)
+        const psd = {
+            width: imageCanvas.width,
+            height: imageCanvas.height,
+            children: [
+                {
+                    name: 'Border',
+                    canvas: borderLayer
+                },
+                {
+                    name: 'Image with styling',
+                    canvas: imageLayer
+                },
+                {
+                    name: 'Original image',
+                    canvas: originalImageLayer,
+                    hidden: true  // This layer will be hidden by default
+                }
+            ],
+            // Add the composite image as the main canvas
+            canvas: compositeCanvas
+        };
+        
+        // Convert to PSD using ag-psd with thumbnail generation
+        console.log('Converting to PSD format...');
+        const psdBuffer = psdLib.writePsd(psd, { 
+            generateThumbnail: true,
+            psb: false,
+            imageResources: {
+                resolutionInfo: {
+                    horizontalResolution: 72,
+                    horizontalResolutionUnit: "PPI",
+                    widthUnit: "Inches",
+                    verticalResolution: 72,
+                    verticalResolutionUnit: "PPI",
+                    heightUnit: "Inches"
+                }
+            }
+        });
+        
+        console.log('PSD created successfully, size:', psdBuffer.byteLength, 'bytes');
+        
+        // Generate a unique filename
+        const timestamp = new Date().getTime();
+        const fileName = `polygon-border-${timestamp}.psd`;
+        
+        // Create a blob from the PSD buffer
+        const blob = new Blob([psdBuffer], { type: 'image/vnd.adobe.photoshop' });
+        
+        // Verify blob creation
+        console.log('PSD blob created:', fileName, 'Size:', blob.size, 'bytes');
+        
+        if (blob.size === 0) {
+            throw new Error('Generated PSD file is empty');
+        }
+        
+        // Store the last created PSD data for direct opening
+        lastCreatedPsdData = {
+            buffer: psdBuffer,
+            fileName: fileName,
+            previewDataURL: compositeCanvas.toDataURL('image/png'),
+            tags: ['polygon-border', 'auto-border', 'generated', 'psd'],
+            annotation: "Generated with Auto Borders Tool"
+        };
+        
+        // Store the blob and filename for drag-and-drop
+        currentPsdBlob = blob;
+        currentPsdFileName = fileName;
+        
+        // Show the drag button in uploading state
+        dragPsdBtn.style.display = 'inline-flex';
+        dragPsdBtnText.textContent = 'Uploading...';
+        dragPsdBtn.draggable = false;
+        
+        // Upload to Firebase and update button when ready
+        try {
+            const uploadResult = await uploadPsdToFirebase(blob, fileName);
+            console.log('PSD uploaded to Firebase for drag-and-drop:', uploadResult.url);
+            currentPsdFirebaseUrl = uploadResult.url;
+            currentPsdFirebasePath = uploadResult.path;
+            
+            // Update button to ready state
+            dragPsdBtnText.textContent = 'Drag URL';
+            dragPsdBtn.draggable = true;
+            dragPsdBtn.title = 'Drag this URL to another app';
+            
+            // Clean up after 1 hour (3600000 ms)
+            setTimeout(() => {
+                deletePsdFromFirebase(uploadResult.path);
+                currentPsdFirebaseUrl = null;
+                currentPsdFirebasePath = null;
+                dragPsdBtnText.textContent = 'Drag PSD';
+                dragPsdBtn.title = 'Drag this file to another app';
+            }, 3600000);
+        } catch (error) {
+            console.error('Error uploading PSD to Firebase:', error);
+            
+            // Update button to fallback state
+            dragPsdBtnText.textContent = 'Drag PSD';
+            dragPsdBtn.draggable = true;
+            dragPsdBtn.title = 'Drag this file to another app (using blob URL)';
+            currentPsdFirebaseUrl = null;
+            currentPsdFirebasePath = null;
         }
     }
 }); 

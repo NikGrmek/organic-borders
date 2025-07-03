@@ -814,43 +814,27 @@ input[type="checkbox"] {
 
 /* Render button styles */
 .render-btn {
-    background-color: #212529 !important;
+    background-color: #000000 !important;
     color: white !important;
-    cursor: pointer !important;
-    position: relative;
-    display: flex !important;
-    align-items: center;
-    gap: 8px;
-    width: auto !important; /* Override download-btn width */
-    margin-top: 0 !important; /* Override download-btn margin */
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 120px;
 }
 
 .render-btn:hover {
-    background-color: #1a1e23 !important;
-    transform: none !important; /* Prevent scaling */
+    background-color: #1a1a1a !important;
 }
 
-.render-btn:disabled {
-    background-color: #6c757d !important;
-    cursor: not-allowed !important;
-    opacity: 0.7;
+.render-btn.rendering {
+    background-color: #333333 !important;
+    cursor: not-allowed;
+    opacity: 0.8;
 }
 
-.render-btn:disabled:hover {
-    background-color: #6c757d !important;
-    transform: none !important;
-}
-
-.render-btn .spinner {
-    width: 20px;
-    height: 20px;
-    margin: 0;
-    border: 3px solid #f3f3f3;
-    border-top: 3px solid #212529;
-    border-radius: 50%;
+.render-btn.rendering svg {
     animation: spin 1s linear infinite;
 }
 
-.render-btn:disabled .spinner {
-    border-top-color: #ffffff;
+.render-btn svg {
+    margin-right: 4px;
 }
