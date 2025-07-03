@@ -269,19 +269,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Hidden but needed for compatibility
     let fillColor = { value: '#FFFFFF' };
     
-    // Sliders
-    const blackAndWhiteFilterCheckbox = document.getElementById('blackAndWhiteFilter');
-    
-    // Default values for black and white points (removed controls)
-    const defaultBlackPoint = 0;
-    const defaultWhitePoint = 255;
-    
-    // Shadow size is now a slider
-    const shadowSizeRange = document.getElementById('shadowSizeRange');
-    const shadowSizeValue = document.getElementById('shadowSizeValue');
-    
-    const shadowOpacityRange = document.getElementById('shadowOpacityRange');
-    const shadowOpacityValue = document.getElementById('shadowOpacityValue');
+
     
     const edgeSelectionModeCheckbox = document.getElementById('edgeSelectionMode');
     
@@ -430,32 +418,7 @@ document.addEventListener('DOMContentLoaded', () => {
         markNeedsRender();
     });
     
-    // Black and white filter controls
-    if (blackAndWhiteFilterCheckbox) {
-        blackAndWhiteFilterCheckbox.addEventListener('change', () => {
-            applyImageFilters();
-            markNeedsRender();
-        });
-    }
-    
-    // Shadow size control
-    if (shadowSizeRange) {
-        shadowSizeRange.addEventListener('input', (e) => {
-            shadowSizeValue.textContent = e.target.value;
-            applyImageFilters();
-            markNeedsRender();
-        });
-    }
-    
-    // Shadow opacity control
-    if (shadowOpacityRange) {
-        shadowOpacityRange.addEventListener('input', (e) => {
-            shadowOpacityValue.textContent = e.target.value;
-            applyImageFilters();
-            markNeedsRender();
-        });
-    }
-    toggleBWFilterControls();
+
     
     // Function to create the control points canvas
     function createControlPointsCanvas() {
@@ -2040,8 +2003,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 let sensitivity = 2; // Default sensitivity divisor (higher = less sensitive)
                 let acceleration = 1; // Default acceleration
                 
-                // Apply enhanced sensitivity to thickness and shadow size controls
-                if (elementId === 'thicknessRange' || elementId === 'shadowSizeRange') {
+                // Apply enhanced sensitivity to thickness control
+                if (elementId === 'thicknessRange') {
                     sensitivity = 1; // More sensitive
                     
                     // Add acceleration based on how far the user has dragged
@@ -2271,7 +2234,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return 'user';
     }
 
-    // Add the function to apply image filters
+    // Function to apply image (simplified - no filters or shadows)
     function applyImageFilters() {
         if (!originalImage) return;
         
@@ -2280,93 +2243,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // Clear the canvas first
         imageCtx.clearRect(0, 0, imageCanvas.width, imageCanvas.height);
         
-        // First draw the original image without effects
+        // Draw the original image without any effects
         imageCtx.drawImage(originalImage, padding, padding, originalImage.width, originalImage.height);
         
-        // Get shadow size and opacity values using getSliderValue to respect custom values
-        const shadowSize = shadowSizeRange ? getSliderValue(shadowSizeRange) : 15;
-        const shadowOpacity = (shadowOpacityRange ? getSliderValue(shadowOpacityRange) : 40) / 100;
+        // Detect edges on the clean image
+        detectEdges();
         
-        // Apply black and white filter if enabled
-        if (blackAndWhiteFilterCheckbox && blackAndWhiteFilterCheckbox.checked) {
-            // Get the image data
-            const imageData = imageCtx.getImageData(
-                padding, 
-                padding, 
-                originalImage.width, 
-                originalImage.height
-            );
-            const data = imageData.data;
-            
-            // Get black point and white point values from sliders using getSliderValue
-            const blackPoint = defaultBlackPoint;
-            const whitePoint = defaultWhitePoint;
-            
-            // Calculate the scale factor for remapping
-            const scale = 255 / (whitePoint - blackPoint);
-            
-            // Convert to black and white with levels adjustment
-            for (let i = 0; i < data.length; i += 4) {
-                // Skip fully transparent pixels
-                if (data[i + 3] === 0) continue;
-                
-                // Calculate grayscale value using luminance formula
-                const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-                
-                // Apply levels adjustment (remap from [blackPoint, whitePoint] to [0, 255])
-                let adjustedGray = Math.max(0, Math.min(255, Math.round((gray - blackPoint) * scale)));
-                
-                // Set RGB values to the adjusted grayscale value
-                data[i] = adjustedGray;     // R
-                data[i + 1] = adjustedGray; // G
-                data[i + 2] = adjustedGray; // B
-                // Alpha channel (i + 3) remains unchanged
-            }
-            
-            // Put the modified image data back on the canvas
-            imageCtx.putImageData(imageData, padding, padding);
-        }
-        
-        // At this point, we have the image with only the B&W filter applied (if enabled)
-        // Store a copy of the current image state for edge detection
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = imageCanvas.width;
-        tempCanvas.height = imageCanvas.height;
-        const tempCtx = tempCanvas.getContext('2d');
-        tempCtx.drawImage(imageCanvas, 0, 0);
-        
-        // Use this for edge detection BEFORE adding shadow
-        detectEdges(tempCanvas);
-        
-        // Now apply shadow effect AFTER edge detection
-        // Create a temporary canvas to apply the drop shadow
-        const shadowCanvas = document.createElement('canvas');
-        shadowCanvas.width = imageCanvas.width;
-        shadowCanvas.height = imageCanvas.height;
-        const shadowCtx = shadowCanvas.getContext('2d');
-        
-        // Copy the current image (with B&W filter applied if enabled, but before shadow)
-        shadowCtx.drawImage(imageCanvas, 0, 0);
-        
-        // Clear the original canvas
-        imageCtx.clearRect(0, 0, imageCanvas.width, imageCanvas.height);
-        
-        // Apply drop shadow to the final result
-        imageCtx.shadowColor = `rgba(0, 0, 0, ${shadowOpacity})`; // Black shadow with user-defined opacity
-        imageCtx.shadowBlur = shadowSize; // User-defined blur amount
-        imageCtx.shadowOffsetX = 0; // 0 distance in X
-        imageCtx.shadowOffsetY = 0; // 0 distance in Y
-        
-        // Draw the processed image with shadow
-        imageCtx.drawImage(shadowCanvas, 0, 0);
-        
-        // Reset shadow for other canvas operations
-        imageCtx.shadowColor = 'transparent';
-        imageCtx.shadowBlur = 0;
-        imageCtx.shadowOffsetX = 0;
-        imageCtx.shadowOffsetY = 0;
-        
-        // Draw image dimensions in the top-left corner
+        // Display image dimensions
         displayImageDimensions();
         
         // Regenerate border with the new edge data
